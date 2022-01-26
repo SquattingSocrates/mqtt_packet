@@ -3,11 +3,11 @@ use std::io::{BufRead, BufReader, Read};
 
 static VARBYTEINT_MASK: u32 = 0x7F;
 static VARBYTEINT_FIN_MASK: u32 = 0x80;
-static VARBYTEINT_MAX: u32 = 268435455;
 
 pub struct ByteReader<R: Read> {
     reader: BufReader<R>,
     read_limit: Option<u32>,
+    read_limits: Vec<u32>,
 }
 
 impl<R: Read> ByteReader<R> {
@@ -15,6 +15,7 @@ impl<R: Read> ByteReader<R> {
         ByteReader {
             reader,
             read_limit: None,
+            read_limits: vec![],
         }
     }
 
@@ -29,6 +30,13 @@ impl<R: Read> ByteReader<R> {
     /// sets a limit of reading, has to be used together
     /// with has_more() and reset_limit()
     pub fn take(&mut self, len: u32) {
+        if let Some(l) = self.read_limit {
+            if len >= l {
+                return;
+            }
+            // push alread subtracted number
+            self.read_limits.push(l - len);
+        }
         self.read_limit = Some(len);
     }
 
@@ -51,7 +59,16 @@ impl<R: Read> ByteReader<R> {
 
     /// resets limit if any was set
     pub fn reset_limit(&mut self) {
-        self.read_limit = None;
+        let vals = (self.read_limits.pop(), self.read_limit);
+        println!("RESETTING LIMIT {:?}", vals);
+        match vals {
+            // if no previous limit was None we just do a complete reset
+            (None, _) => self.read_limit = None,
+            (x, None) => self.read_limit = x,
+            // check if current limit has not been reached
+            // and add back unfinished reads
+            (Some(l), Some(curr)) => self.read_limit = Some(l + curr),
+        }
     }
 
     pub fn read_len(&mut self, len: u32) -> Result<Vec<u8>, String> {
@@ -137,28 +154,32 @@ impl<R: Read> ByteReader<R> {
         }
     }
 
-    fn start_properties_decode(&mut self) -> Res<()> {
+    fn start_properties_decode(&mut self) -> Res<u32> {
         let length = self.read_variable_int()?;
-        self.take(length);
-        Ok(())
+        if length > 0 {
+            self.take(length);
+        }
+        println!("START DECODING {}", length);
+        Ok(length)
     }
 
     fn decode_property(&mut self) -> Result<(u8, PropType), String> {
         let prop_type = self.read_u8()?;
         match prop_type {
-            0x01 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
-            0x02 => Ok((prop_type, PropType::U32(self.read_u32()?))),
-            0x03 => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
-            0x08 => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
-            0x09 => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
-            0x0B => Ok((prop_type, PropType::U32(self.read_u32()?))),
-            0x23 => Ok((prop_type, PropType::U16(self.read_u16()?))),
+            0x01 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))), // payload_format_indicator
+            0x02 => Ok((prop_type, PropType::U32(self.read_u32()?))), // message_expiry_interval
+            0x03 => Ok((prop_type, PropType::String(self.read_utf8_string()?))), // content_type
+            0x08 => Ok((prop_type, PropType::String(self.read_utf8_string()?))), // response_topic
+            0x09 => Ok((prop_type, PropType::String(self.read_utf8_string()?))), // correlation data
+            0x0B => Ok((prop_type, PropType::U32(self.read_u32()?))), // subscription identifier
+            0x23 => Ok((prop_type, PropType::U16(self.read_u16()?))), // topic alias
             0x26 => {
+                // user properties
                 let name = self.read_utf8_string()?;
                 let value = self.read_utf8_string()?;
                 Ok((prop_type, PropType::Pair(name, value)))
             }
-            0x18 => Ok((prop_type, PropType::U32(self.read_u32()?))),
+            0x18 => Ok((prop_type, PropType::U32(self.read_u32()?))), // will delay interval
             0x11 => Ok((prop_type, PropType::U32(self.read_u32()?))),
             0x15 => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
             0x16 => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
@@ -172,7 +193,7 @@ impl<R: Read> ByteReader<R> {
             0x1A => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
             0x1C => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
             0x1F => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
-            0x24 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
+            0x24 => Ok((prop_type, PropType::U8(self.read_u8()?))),
             0x25 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
             0x28 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
             0x29 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
@@ -181,18 +202,34 @@ impl<R: Read> ByteReader<R> {
         }
     }
 
-    pub fn read_properties(&mut self) -> Res<Vec<(u8, PropType)>> {
-        let mut props = vec![];
-        self.start_properties_decode()?;
-        let mut user_properties = UserProperties::new();
+    pub fn consume(&mut self) -> Res<Vec<u8>> {
+        if self.read_limit.is_some() {
+            self.read_len(self.read_limit.unwrap())
+        } else {
+            Err("Cannot consume if no limit specified".to_string())
+        }
+    }
 
+    pub fn read_properties(&mut self) -> Res<Option<Vec<(u8, PropType)>>> {
+        let mut props = vec![];
+        println!("STARTiNG TO READ PROPS {:?}", self.has_more());
+        // zero length properties are also valid
+        if self.start_properties_decode()? == 0 {
+            return Ok(None);
+        }
+        let mut user_properties = UserProperties::new();
+        let mut subscription_identifiers = vec![];
+
+        // TODO: return Err when key is repeated, but not allowed to
         while self.has_more() {
             let prop = self.decode_property()?;
+            println!("DECODING PROP {:?}", prop);
             match prop {
                 (0x26, PropType::Pair(k, v)) => {
                     let p = user_properties.entry(k).or_insert(vec![]);
                     p.push(v);
                 }
+                (0x0B, PropType::U32(v)) => subscription_identifiers.push(v),
                 x => props.push(x),
             }
         }
@@ -200,8 +237,14 @@ impl<R: Read> ByteReader<R> {
         if user_properties.len() > 0 {
             props.push((0x26, PropType::Map(user_properties)));
         }
+        if subscription_identifiers.len() > 0 {
+            props.push((0x0B, PropType::U32Vec(subscription_identifiers)))
+        }
         self.reset_limit();
-        Ok(props)
+        if props.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(props))
     }
 }
 
@@ -298,5 +341,35 @@ mod test {
         assert_eq!(Ok(32), reader.read_u8());
         // should not have more
         assert!(!reader.has_more());
+    }
+
+    #[test]
+    // this is important since we might be
+    fn test_multiple_limits() {
+        let src = Cursor::new(vec![0, 4, 8, 16, 32, 64, 128]);
+        let r = BufReader::new(src);
+        let mut reader = ByteReader::new(r);
+        reader.take(5);
+        assert_eq!(Ok(0), reader.read_u8());
+        // take less now, 4 were left
+        reader.take(3);
+        assert!(reader.has_more());
+        assert_eq!(Ok(4), reader.read_u8());
+        assert!(reader.has_more());
+        assert_eq!(Ok(8), reader.read_u8());
+        assert!(reader.has_more());
+        // reset limit to 5 - 3 + 1
+        reader.reset_limit();
+        assert_eq!(Ok(16), reader.read_u8());
+        assert_eq!(Ok(32), reader.read_u8());
+        // should not have more (e.g. length of fixed header ended here)
+        assert!(!reader.has_more());
+        // after another reset more of the buffer is available
+        reader.reset_limit();
+        assert!(reader.has_more());
+        assert_eq!(Ok(64), reader.read_u8());
+        assert_eq!(Ok(128), reader.read_u8());
+        // now we are done for real
+        assert_eq!(false, reader.has_more());
     }
 }

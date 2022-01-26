@@ -1,4 +1,10 @@
+pub mod auth;
 pub mod byte_reader;
+pub mod connack;
 pub mod connect;
+pub mod disconnect;
 pub mod packet;
+pub mod publish;
 pub mod structure;
+pub mod subscribe;
+pub mod unsubscribe;

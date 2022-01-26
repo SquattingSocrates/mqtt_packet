@@ -1,186 +1,261 @@
-use crate::byte_reader::*;
-use crate::byte_reader::*;
-use crate::connect::*;
+use crate::byte_reader::ByteReader;
+use crate::connect::ConnectFlags;
 use crate::structure::*;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::io;
 
-#[macro_use]
-macro_rules! extend_base_packet {
-    (pub struct $name:ident { $( $field:ident: $ty:ty ),* $(,)* }) => {
-        struct $name {
-            fixed: FixedHeader,
-            message_id: Option<u32>,
-            $( $field: $ty ),*
-        }
-    };
-}
-
+#[derive(Debug, PartialEq)]
 pub enum MqttPacket {
     Connect(ConnectPacket),
+    Connack(ConnackPacket),
+    Subscribe(SubscribePacket),
+    Suback(SubackPacket),
+    Publish(PublishPacket),
+    Puback(ConfirmationPacket),
+    Pubrec(ConfirmationPacket),
+    Pubrel(ConfirmationPacket),
+    Pubcomp(ConfirmationPacket),
+    Unsubscribe(UnsubscribePacket),
+    Unsuback(UnsubackPacket),
+    Pingreq(PingreqPacket),
+    Pingresp(PingrespPacket),
+    Disconnect(DisconnectPacket),
+    Auth(AuthPacket),
 }
 
-fn is_variable_length_int(byte: &u8) -> bool {
-    *byte & 0x40 == 0x40
+pub struct PacketDecoder<R: io::Read> {
+    pub(crate) reader: ByteReader<R>,
 }
 
-// fn decode_bytes(buf: &[u8]) -> Self;
-// fn encode_bytes(&self) -> Vec<u8>;
+impl<R: io::Read> PacketDecoder<R> {
+    pub fn new(reader: ByteReader<R>) -> PacketDecoder<R> {
+        PacketDecoder { reader }
+    }
 
-struct PacketParser {}
+    pub fn decode_packet(&mut self, protocol_version: u8) -> Res<MqttPacket> {
+        let (length, fixed) = self.reader.read_header()?;
+        println!("GOT LENGTH AND HEADER {:?} {:?}", length, fixed);
+        self.reader.take(length);
+        match self.decode_by_type(fixed, length, protocol_version) {
+            Ok(msg) => {
+                self.reader.reset_limit();
+                Ok(msg)
+            }
+            Err(e) => {
+                self.reader.reset_limit();
+                Err(e)
+            }
+        }
+    }
 
-impl PacketParser {
-    // helper method
-
-    // pub fn read_next(&mut self) -> MqttPacket {
-    //     let (length, fixed) = self.reader.decode_header()?;
-    //     match fixed.cmd {
-    //         Connect => MqttPacket::Connect(ConnectPacket::decode_bytes(self.reader, fixed, length)),
-    //     }
-    // }
+    fn decode_by_type(
+        &mut self,
+        fixed: FixedHeader,
+        length: u32,
+        protocol_version: u8,
+    ) -> Res<MqttPacket> {
+        Ok(match fixed.cmd {
+            PacketType::Connect => {
+                MqttPacket::Connect(self.decode_connect_with_length(fixed, length)?)
+            }
+            PacketType::Connack => MqttPacket::Connack(self.decode_connack_with_length(
+                fixed,
+                length,
+                protocol_version,
+            )?),
+            PacketType::Subscribe => MqttPacket::Subscribe(self.decode_subscribe_with_length(
+                fixed,
+                length,
+                protocol_version,
+            )?),
+            PacketType::Suback => MqttPacket::Suback(self.decode_suback_with_length(
+                fixed,
+                length,
+                protocol_version,
+            )?),
+            PacketType::Publish => MqttPacket::Publish(self.decode_publish_with_length(
+                fixed,
+                length,
+                protocol_version,
+            )?),
+            PacketType::Puback => MqttPacket::Puback(self.decode_confirmation_with_length(
+                fixed,
+                length,
+                protocol_version,
+            )?),
+            PacketType::Pubrec => MqttPacket::Pubrec(self.decode_confirmation_with_length(
+                fixed,
+                length,
+                protocol_version,
+            )?),
+            PacketType::Pubrel => MqttPacket::Pubrel(self.decode_confirmation_with_length(
+                fixed,
+                length,
+                protocol_version,
+            )?),
+            PacketType::Pubcomp => MqttPacket::Pubcomp(self.decode_confirmation_with_length(
+                fixed,
+                length,
+                protocol_version,
+            )?),
+            PacketType::Unsubscribe => MqttPacket::Unsubscribe(
+                self.decode_unsubscribe_with_length(fixed, length, protocol_version)?,
+            ),
+            PacketType::Unsuback => MqttPacket::Unsuback(self.decode_unsuback_with_length(
+                fixed,
+                length,
+                protocol_version,
+            )?),
+            PacketType::Pingreq => MqttPacket::Pingreq(PingreqPacket { fixed }),
+            PacketType::Pingresp => MqttPacket::Pingresp(PingrespPacket { fixed }),
+            PacketType::Disconnect => MqttPacket::Disconnect(self.decode_disconnect_with_length(
+                fixed,
+                length,
+                protocol_version,
+            )?),
+            PacketType::Auth => {
+                MqttPacket::Auth(self.decode_auth_with_length(fixed, length, protocol_version)?)
+            }
+            PacketType::Reserved => return Err("Cannot use RESERVED message type".to_string()),
+        })
+    }
 }
 
-// export interface IPublishPacket extends IPacket {
-//   cmd: 'publish'
-//   qos: QoS
-//   dup: boolean
-//   retain: boolean
-//   topic: string
-//   payload: string | Buffer
-//   properties?: {
-//     payloadFormatIndicator: bool,
-//     messageExpiryInterval?: number,
-//     topicAlias?: number,
-//     responseTopic: Option<String>,
-//     correlationData?: Buffer,
-//     userProperties?: UserProperties,
-//     subscriptionIdentifier?: number,
-//     contentType: Option<String>,
-//   }
-// }
+pub struct PacketEncoder {
+    //<W: io::Write> {
+    // pub(crate) writer: W,
+    pub(crate) buf: Vec<u8>,
+}
 
-// export interface IConnackPacket extends IPacket {
-//   cmd: 'connack'
-//   returnCode?: number,
-//   reasonCode?: number,
-//   sessionPresent: boolean
-//   properties?: {
-//     sessionExpiryInterval?: number,
-//     receiveMaximum?: number,
-//     maximumQoS?: number,
-//     retainAvailable: bool,
-//     maximumPacketSize?: number,
-//     assignedClientIdentifier: Option<String>,
-//     topicAliasMaximum?: number,
-//     reasonString: Option<String>,
-//     userProperties?: UserProperties,
-//     wildcardSubscriptionAvailable: bool,
-//     subscriptionIdentifiersAvailable: bool,
-//     sharedSubscriptionAvailable: bool,
-//     serverKeepAlive?: number,
-//     responseInformation: Option<String>,
-//     serverReference: Option<String>,
-//     authenticationMethod: Option<String>,
-//     authenticationData?: Buffer
-//   }
-// }
+impl PacketEncoder {
+    pub fn new() -> PacketEncoder {
+        PacketEncoder { buf: vec![] }
+    }
 
-// export interface ISubscription {
-//   topic: string
-//   qos: QoS,
-//   nl: bool,
-//   rap: bool,
-//   rh?: number
-// }
+    pub fn encode_multibyte_num(message_id: u32) -> Vec<u8> {
+        // println!("SPLITTING MESSAGE_ID {}", message_id, message_id >> 8, message_id as u8);
+        vec![(message_id >> 8) as u8, message_id as u8]
+    }
 
-// export interface ISubscribePacket extends IPacket {
-//   cmd: 'subscribe'
-//   subscriptions: ISubscription[],
-//   properties?: {
-//     reasonString: Option<String>,
-//     userProperties?: UserProperties
-//   }
-// }
+    pub fn encode_variable_num(mut length: u32) -> Vec<u8> {
+        let mut v = Vec::<u8>::with_capacity(4);
+        while length > 0 {
+            let mut next = length % 128;
+            length /= 128;
+            if length > 0 {
+                next |= 0x80;
+            }
+            v.push(next as u8);
+        }
+        v
+    }
 
-// export interface ISubackPacket extends IPacket {
-//   cmd: 'suback',
-//   reasonCode?: number,
-//   properties?: {
-//     reasonString: Option<String>,
-//     userProperties?: UserProperties
-//   },
-//   granted: number[] | Object[]
-// }
+    pub fn write_variable_num(&mut self, length: u32) {
+        let mut encoded = Self::encode_variable_num(length);
+        self.buf.append(&mut encoded);
+    }
 
-// export interface IUnsubscribePacket extends IPacket {
-//   cmd: 'unsubscribe',
-//   properties?: {
-//     reasonString: Option<String>,
-//     userProperties?: UserProperties
-//   },
-//   unsubscriptions: string[]
-// }
+    pub fn write_utf8_string(&mut self, s: String) {
+        self.write_u16(s.len() as u16);
+        for b in s.bytes() {
+            self.buf.push(b);
+        }
+    }
 
-// export interface IUnsubackPacket extends IPacket {
-//   cmd: 'unsuback',
-//   reasonCode?: number,
-//   properties?: {
-//     reasonString: Option<String>,
-//     userProperties?: UserProperties
-//   }
-// }
+    pub fn write_u16(&mut self, length: u16) {
+        self.buf.push((length >> 8) as u8);
+        self.buf.push(length as u8);
+    }
 
-// export interface IPubackPacket extends IPacket {
-//   cmd: 'puback',
-//   reasonCode?: number,
-//   properties?: {
-//     reasonString: Option<String>,
-//     userProperties?: UserProperties
-//   }
-// }
+    pub fn write_u32(&mut self, num: u32) {
+        let mut encoded = vec![
+            (num >> 24) as u8,
+            (num >> 16) as u8,
+            (num >> 8) as u8,
+            num as u8,
+        ];
+        self.buf.append(&mut encoded);
+    }
 
-// export interface IPubcompPacket extends IPacket {
-//   cmd: 'pubcomp',
-//   reasonCode?: number,
-//   properties?: {
-//     reasonString: Option<String>,
-//     userProperties?: UserProperties
-//   }
-// }
+    pub fn write_header(&mut self, fixed: FixedHeader) {
+        self.buf.push(fixed.encode());
+    }
 
-// export interface IPubrelPacket extends IPacket {
-//   cmd: 'pubrel',
-//   reasonCode?: number,
-//   properties?: {
-//     reasonString: Option<String>,
-//     userProperties?: UserProperties
-//   }
-// }
+    pub fn write_u8(&mut self, byte: u8) {
+        self.buf.push(byte);
+    }
 
-// export interface IPubrecPacket extends IPacket {
-//   cmd: 'pubrec',
-//   reasonCode?: number,
-//   properties?: {
-//     reasonString: Option<String>,
-//     userProperties?: UserProperties
-//   }
-// }
+    pub fn write_vec(&mut self, mut v: Vec<u8>) {
+        self.buf.append(&mut v);
+    }
+}
 
-// export interface IPingreqPacket extends IPacket {
-//   cmd: 'pingreq'
-// }
+pub struct PropertyEncoder {
+    writer: PacketEncoder,
+}
+impl PropertyEncoder {
+    fn new() -> PropertyEncoder {
+        PropertyEncoder {
+            writer: PacketEncoder::new(),
+        }
+    }
 
-// export interface IPingrespPacket extends IPacket {
-//   cmd: 'pingresp'
-// }
+    pub(crate) fn encode<T: Properties>(props: Option<T>, protocol_version: u8) -> Res<Vec<u8>> {
+        // Confirm should not add empty property length with no properties (rfc 3.4.2.2.1)
+        if protocol_version == 5 {
+            if props.is_some() {
+                let pairs = props.unwrap().to_pairs()?;
+                PropertyEncoder::new().write_properties(pairs)
+            } else {
+                Ok(vec![0]) // empty properties
+            }
+        } else {
+            Ok(vec![]) // no properties exist in MQTT < 5
+        }
+    }
 
-// export interface IDisconnectPacket extends IPacket {
-//   cmd: 'disconnect',
-//   reasonCode?: number,
-//   properties?: {
-//     sessionExpiryInterval?: number,
-//     reasonString: Option<String>,
-//     userProperties?: UserProperties,
-//     serverReference: Option<String>,
-//   }
-// }
+    pub fn write_properties(mut self, props: Vec<(u8, PropType)>) -> Res<Vec<u8>> {
+        self.writer.write_variable_num(props.len() as u32);
+        for prop in props {
+            match prop {
+                (code, PropType::U32(v)) => {
+                    self.writer.write_u8(code);
+                    self.writer.write_u32(v);
+                }
+                (code, PropType::U16(v)) => {
+                    self.writer.write_u8(code);
+                    self.writer.write_u16(v)
+                }
+                (code, PropType::U8(v)) => {
+                    self.writer.write_u8(code);
+                    self.writer.write_u8(v)
+                }
+                (code, PropType::String(v)) => {
+                    self.writer.write_u8(code);
+                    self.writer.write_utf8_string(v)
+                }
+                // should never happen actually
+                (_, PropType::Pair(_, _)) => {}
+                (code, PropType::Map(map)) => {
+                    self.writer.write_u8(code);
+                    for (k, v) in map.into_iter() {
+                        for val in v {
+                            self.writer.write_u8(code);
+                            self.writer.write_utf8_string(val);
+                        }
+                    }
+                }
+                (code, PropType::Bool(v)) => {
+                    self.writer.write_u8(code);
+                    self.writer.write_u8(v as u8)
+                }
+                (code, PropType::U32Vec(v)) => {
+                    self.writer.write_u8(code);
+                    for num in v {
+                        self.writer.write_u32(num);
+                    }
+                }
+            }
+        }
+        Ok(self.writer.buf)
+    }
+}
