@@ -1,7 +1,7 @@
 mod tests {
-    use mqtt_packet::byte_reader::*;
-    use mqtt_packet::packet::*;
-    use mqtt_packet::structure::*;
+    use mqtt_packet_3_5::byte_reader::*;
+    use mqtt_packet_3_5::packet::*;
+    use mqtt_packet_3_5::structure::*;
     use std::io::{BufReader, Cursor};
 
     fn dec_from_buf(v: Vec<u8>) -> PacketDecoder<Cursor<Vec<u8>>> {

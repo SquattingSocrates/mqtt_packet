@@ -60,7 +60,7 @@ pub mod unsubscribe;
 /// # Examples
 ///
 /// ```
-/// use mqtt_packet::*;
+/// use mqtt_packet_3_5::*;
 /// let packet = MqttPacket::Pingreq(PingreqPacket {
 ///     fixed: FixedHeader {
 ///         cmd: PacketType::Pingreq,
@@ -71,7 +71,7 @@ pub mod unsubscribe;
 /// });
 /// assert_eq!(Ok(vec![
 ///     192, 0, // Header
-/// ]), mqtt_packet::PacketEncoder::encode_packet(packet, 5));
+/// ]), mqtt_packet_3_5::PacketEncoder::encode_packet(packet, 5));
 ///
 ///
 /// ```
@@ -79,7 +79,7 @@ pub mod unsubscribe;
 ///
 /// ```
 /// use std::io;
-/// let mut decoder = mqtt_packet::PacketDecoder::from_stream(io::Cursor::new(vec![192, 0])); // pingreq
+/// let mut decoder = mqtt_packet_3_5::PacketDecoder::from_stream(io::Cursor::new(vec![192, 0])); // pingreq
 /// while decoder.has_more() {
 ///     decoder.decode_packet(5); // will parse packets of version 5
 /// }

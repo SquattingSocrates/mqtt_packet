@@ -37,7 +37,7 @@ impl<R: io::Read> PacketDecoder<R> {
     ///
     /// ```
     /// use std::io;
-    /// let mut decoder = mqtt_packet::PacketDecoder::from_stream(io::Cursor::new(vec![192, 0])); // pingreq
+    /// let mut decoder = mqtt_packet_3_5::PacketDecoder::from_stream(io::Cursor::new(vec![192, 0])); // pingreq
     /// while decoder.has_more() {
     ///     decoder.decode_packet(5); // will parse packets of version 5
     /// }
@@ -55,7 +55,7 @@ impl<R: io::Read> PacketDecoder<R> {
     /// ```
     /// use std::io;
     /// let buf = io::BufReader::new(io::Cursor::new(vec![192, 0])); // pingreq
-    /// let mut decoder = mqtt_packet::PacketDecoder::from_bufreader(buf);
+    /// let mut decoder = mqtt_packet_3_5::PacketDecoder::from_bufreader(buf);
     /// while decoder.has_more() {
     ///     decoder.decode_packet(5); // will parse packets of version 5
     /// }
@@ -88,12 +88,12 @@ impl<R: io::Read> PacketDecoder<R> {
     ///        // new packet here
     ///        192, 0
     /// ])); // pingreq
-    /// let mut decoder = mqtt_packet::PacketDecoder::from_bufreader(buf);
+    /// let mut decoder = mqtt_packet_3_5::PacketDecoder::from_bufreader(buf);
     /// let mut protocol_version = 5;
     /// while decoder.has_more() {
     ///     let msg = decoder.decode_packet(protocol_version); // will parse packets of version 5
     ///     // set the protocol version for a client on a stream
-    ///     if let Ok(mqtt_packet::MqttPacket::Connect(packet)) = msg {
+    ///     if let Ok(mqtt_packet_3_5::MqttPacket::Connect(packet)) = msg {
     ///         protocol_version = packet.protocol_version;
     ///     }
     /// }
@@ -203,7 +203,7 @@ impl PacketEncoder {
     /// # Examples
     ///
     /// ```
-    /// use mqtt_packet::*;
+    /// use mqtt_packet_3_5::*;
     /// let packet = MqttPacket::Pingreq(PingreqPacket {
     ///     fixed: FixedHeader {
     ///         cmd: PacketType::Pingreq,
@@ -214,7 +214,7 @@ impl PacketEncoder {
     /// });
     /// assert_eq!(Ok(vec![
     ///     192, 0, // Header
-    /// ]), mqtt_packet::PacketEncoder::encode_packet(packet, 5));
+    /// ]), mqtt_packet_3_5::PacketEncoder::encode_packet(packet, 5));
     ///
     ///
     /// ```

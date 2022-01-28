@@ -3,7 +3,7 @@
 version = 3
 
 [[package]]
-name = "mqtt_packet"
+name = "mqtt_packet_3_5"
 version = "0.1.0"
 dependencies = [
  "serde",
