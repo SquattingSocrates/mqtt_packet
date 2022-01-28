@@ -3,8 +3,47 @@ use crate::structure::*;
 use std::io;
 
 impl PacketEncoder {
-    pub fn encode_suback(&mut self, packet: ConfirmationPacket) -> Res<Vec<u8>> {
-        Ok(vec![])
+    pub fn encode_suback(mut self, packet: SubackPacket, protocol_version: u8) -> Res<Vec<u8>> {
+        // Check message ID
+        let mut length = 2;
+
+        // Check granted qos vector
+        let granted: Vec<u8> = if protocol_version == 5 {
+            packet
+                .granted_reason_codes
+                .iter()
+                .map(|code| code.to_byte())
+                .collect()
+        } else {
+            packet
+                .granted_qos
+                .iter()
+                .map(|code| code.to_byte())
+                .collect()
+        };
+        length += granted.len();
+
+        // properies mqtt 5
+        println!("PROPERTIES  {:?}", packet.properties);
+        let properties_data = PropertyEncoder::encode(packet.properties, protocol_version)?;
+        println!("PROPERTIES DATA {:?}", properties_data);
+        length += properties_data.len();
+
+        // header
+        self.write_header(packet.fixed);
+
+        // Length
+        self.write_variable_num(length as u32)?;
+
+        // Message ID
+        self.write_u16(packet.message_id);
+
+        // properies mqtt 5
+        self.write_vec(properties_data);
+
+        // Granted data
+        self.write_vec(granted);
+        Ok(self.buf)
     }
 }
 
@@ -24,6 +63,8 @@ impl<R: io::Read> PacketDecoder<R> {
             properties: None,
             granted_reason_codes: vec![],
             granted_qos: vec![],
+            message_id,
+            length,
         };
 
         // Properties mqtt 5
@@ -44,7 +85,7 @@ impl<R: io::Read> PacketDecoder<R> {
             if protocol_version == 5 {
                 packet
                     .granted_reason_codes
-                    .push(GrantedReasonCode::from_byte(code)?);
+                    .push(SubscriptionReasonCode::from_byte(code)?);
             } else {
                 packet.granted_qos.push(match code {
                     0 => QoS::QoS0,

@@ -10,6 +10,68 @@ const SUBSCRIBE_OPTIONS_RAP_SHIFT: u8 = 3;
 const SUBSCRIBE_OPTIONS_RH_MASK: u8 = 0x03;
 const SUBSCRIBE_OPTIONS_RH_SHIFT: u8 = 4;
 
+impl PacketEncoder {
+    pub fn encode_subscribe(
+        mut self,
+        packet: SubscribePacket,
+        protocol_version: u8,
+    ) -> Res<Vec<u8>> {
+        // Check message ID
+        let mut length = 2;
+
+        // check subscriptions
+        for sub in packet.subscriptions.iter() {
+            if sub.topic.is_empty() {
+                return Err("Invalid subscriptions - empty topic".to_string());
+            }
+
+            if protocol_version == 5 {
+                if sub.rh.is_none() || sub.rh.unwrap() > 2 {
+                    return Err("Invalid subscriptions - invalid Retain Handling".to_string());
+                }
+            }
+
+            length += sub.topic.len() + 2 + 1;
+        }
+
+        // properies mqtt 5
+        println!("PROPERTIES  {:?}", packet.properties);
+        let properties_data = PropertyEncoder::encode(packet.properties, protocol_version)?;
+        println!("PROPERTIES DATA {:?}", properties_data);
+        length += properties_data.len();
+
+        // header
+        self.write_header(packet.fixed);
+
+        // Length
+        self.write_variable_num(length as u32)?;
+
+        // Message ID
+        self.write_u16(packet.message_id);
+
+        // properies mqtt 5
+        self.write_vec(properties_data);
+
+        // subscriptions payload
+        println!("ENCODING SUBS {:?}", packet.subscriptions);
+        for sub in packet.subscriptions {
+            self.write_utf8_string(sub.topic);
+            let mut options = sub.qos.to_byte();
+            if protocol_version == 5 {
+                let nl = (sub.nl as u8) << SUBSCRIBE_OPTIONS_NL_SHIFT;
+                let rap = (sub.rap as u8) << SUBSCRIBE_OPTIONS_RAP_SHIFT;
+                let rh = match sub.rh {
+                    Some(0 | 1 | 2) => sub.rh.unwrap() << SUBSCRIBE_OPTIONS_RH_SHIFT,
+                    _ => return Err("Invalid retain handling, must be <= 2".to_string()),
+                };
+                options = options | nl | rap | rh;
+            }
+            self.write_u8(options);
+        }
+        Ok(self.buf)
+    }
+}
+
 impl<R: io::Read> PacketDecoder<R> {
     pub fn decode_subscribe_with_length(
         &mut self,
@@ -24,6 +86,7 @@ impl<R: io::Read> PacketDecoder<R> {
             properties: None,
             message_id,
             subscriptions: vec![],
+            length,
         };
 
         // Properties mqtt 5

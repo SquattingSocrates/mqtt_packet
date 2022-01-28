@@ -11,18 +11,20 @@ mod tests {
     }
 
     fn test_decode(name: &str, packet: ConnectPacket, buf: Vec<u8>) {
-        let mut decoder = dec_from_buf(buf);
+        let mut decoder = dec_from_buf(buf.clone());
         println!("Failed: {}", name);
         assert_eq!(
             MqttPacket::Connect(packet.clone()),
             decoder.decode_packet(3).unwrap()
         );
         let encoder = PacketEncoder::new();
-        // assert_eq!(buf, encoder.encode_connect(packet).unwrap());
+        assert_eq!(buf, encoder.encode_connect(packet).unwrap());
     }
 
-    fn test_encode(name: &str, packet: ConnectPacket, buf: Vec<u8>) {
-        println!("NOT IMPLEMENTED");
+    fn test_encode_error(msg: &str, packet: ConnectPacket) {
+        println!("Failed: {}", msg);
+        let encoder = PacketEncoder::new();
+        assert_eq!(Err(msg.to_string()), encoder.encode_connect(packet));
     }
 
     #[test]
@@ -57,18 +59,29 @@ mod tests {
             116, 101, 115, 116, // Client ID
         ];
         test_decode("Minimal connect", expected, buf);
-        // test no client_id
-        clone.client_id = String::new();
-        let buf = vec![
-            16, 18, // Header
-            0, 6, // Protocol ID length
-            77, 81, 73, 115, 100, 112, // Protocol ID
-            3,   // Protocol version
-            0,   // Connect flags
-            0, 30, // Keepalive
-            0, 0, // Client ID length
-        ];
-        test_decode("Minimal connect", clone, buf);
+    }
+
+    #[test]
+    fn test_err_without_client_id() {
+        let expected = ConnectPacket {
+            fixed: FixedHeader {
+                cmd: PacketType::Connect,
+                qos: 0,
+                dup: false,
+                retain: false,
+            },
+            length: 18,
+            protocol_id: Protocol::from_str("MQIsdp"),
+            protocol_version: 3,
+            keep_alive: 30,
+            clean_session: false,
+            user_name: None,
+            password: None,
+            will: None,
+            client_id: "".to_string(),
+            properties: None,
+        };
+        test_encode_error("client_id must be supplied before 3.1.1", expected);
     }
 
     #[test]
@@ -90,17 +103,17 @@ mod tests {
                 will: Some(LastWill {
                     retain: true,
                     qos: 2,
-                    properties: WillProperties {
+                    properties: Some(WillProperties {
                         will_delay_interval: 1234,
                         payload_format_indicator: false,
                         message_expiry_interval: Some(4321),
                         content_type: Some("test".to_string()),
                         response_topic: Some("topic".to_string()),
-                        correlation_data: Some(String::from_utf8(vec![1, 2, 3, 4]).unwrap()),
+                        correlation_data: vec![1, 2, 3, 4],
                         user_properties: [("test".to_string(), vec!["test".to_string()])]
                             .into_iter()
                             .collect::<UserProperties>(), //{ test: 'test' }
-                    },
+                    }),
                     topic: Some("topic".to_string()),
                     payload: Some(String::from_utf8(vec![4, 3, 2, 1]).unwrap()),
                 }),
@@ -178,15 +191,15 @@ mod tests {
                 will: Some(LastWill {
                     retain: true,
                     qos: 2,
-                    properties: WillProperties {
+                    properties: Some(WillProperties {
                         will_delay_interval: 1234,
                         payload_format_indicator: false,
                         message_expiry_interval: Some(4321),
                         content_type: Some("test".to_string()),
                         response_topic: Some("topic".to_string()),
-                        correlation_data: Some(String::from_utf8(vec![1, 2, 3, 4]).unwrap()),
+                        correlation_data: vec![1, 2, 3, 4],
                         user_properties: user_properties.clone(), //{ test: 'test' }
-                    },
+                    }),
                     topic: Some("topic".to_string()),
                     payload: Some(String::from_utf8(vec![]).unwrap()),
                 }),
@@ -258,7 +271,7 @@ mod tests {
                 will: Some(LastWill {
                     retain: true,
                     qos: 2,
-                    properties: WillProperties::default(),
+                    properties: None,
                     topic: Some("topic".to_string()),
                     payload: Some(String::from_utf8(vec![4, 3, 2, 1]).unwrap()),
                 }),
@@ -310,7 +323,7 @@ mod tests {
     #[test]
     fn test_connect_3() {
         test_decode(
-            "no clientId with 3.1.1",
+            "no client_id with 3.1.1",
             ConnectPacket {
                 fixed: FixedHeader {
                     cmd: PacketType::Connect,
@@ -339,5 +352,97 @@ mod tests {
                 0, 0, // Client ID length
             ],
         );
+    }
+
+    #[test]
+    fn multiple_messages_1() {
+        let buf = vec![
+            // First, a valid connect packet:
+            16, 12, // Header
+            0, 4, // Protocol ID length
+            77, 81, 84, 84, // Protocol ID
+            4,  // Protocol version
+            2,  // Connect flags
+            0, 30, // Keepalive
+            0, 0, // Client ID length
+            //
+            // Then an invalid subscribe packet:
+            128, 9, // Header (subscribeqos=0length=9)
+            0, 6, // Message ID (6)
+            0, 4, // Topic length,
+            116, 101, 115, 116, // Topic (test)
+            0,   // Qos (0)
+            //
+            // And another invalid subscribe packet:
+            128, 9, // Header (subscribeqos=0length=9)
+            0, 6, // Message ID (6)
+            0, 4, // Topic length,
+            116, 101, 115, 116, // Topic (test)
+            0,   // Qos (0)
+            //
+            // Finally, a valid disconnect packet:
+            224, 0, // Header
+            // =======================
+            // same buffer, but new connection attempt
+            // Connect:
+            16, 12, // Header
+            0, 4, // Protocol ID length
+            77, 81, 84, 84, // Protocol ID
+            4,  // Protocol version
+            2,  // Connect flags
+            0, 30, // Keepalive
+            0, 0, // Client ID length
+            // Disconnect:
+            224, 0, // Header
+        ];
+        let mut decoder = dec_from_buf(buf);
+        let mut messages = vec![];
+        while decoder.has_more() {
+            let msg = decoder.decode_packet(3);
+            println!("DECODING {:?}", msg);
+            messages.push(msg);
+        }
+        assert_eq!(6, messages.len());
+        assert_eq!(true, messages[0].is_ok());
+        assert!(
+            if let MqttPacket::Connect(ConnectPacket { .. }) = messages[0].as_ref().unwrap() {
+                true
+            } else {
+                false
+            }
+        );
+        assert_eq!(true, messages[1].is_err());
+        assert_eq!(true, messages[2].is_err());
+        assert_eq!(true, messages[3].is_ok());
+        assert!(if let MqttPacket::Disconnect(DisconnectPacket {
+            reason_code: None,
+            length: 0,
+            ..
+        }) = messages[3].as_ref().unwrap()
+        {
+            true
+        } else {
+            false
+        });
+        assert_eq!(true, messages[4].is_ok());
+        assert!(
+            if let MqttPacket::Connect(ConnectPacket { .. }) = messages[4].as_ref().unwrap() {
+                true
+            } else {
+                false
+            }
+        );
+
+        assert_eq!(true, messages[5].is_ok());
+        assert!(if let MqttPacket::Disconnect(DisconnectPacket {
+            reason_code: None,
+            length: 0,
+            ..
+        }) = messages[5].as_ref().unwrap()
+        {
+            true
+        } else {
+            false
+        });
     }
 }

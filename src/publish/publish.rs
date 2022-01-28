@@ -18,6 +18,7 @@ impl<R: io::Read> PacketDecoder<R> {
             properties: None,
             payload: vec![],
             message_id: None,
+            length,
         };
         // Parse messageId
         if packet.fixed.qos > 0 {
@@ -39,7 +40,7 @@ impl<R: io::Read> PacketDecoder<R> {
 }
 
 impl PacketEncoder {
-    pub fn encode_publish(mut self, packet: PublishPacket) -> Res<Vec<u8>> {
+    pub fn encode_publish(mut self, packet: PublishPacket, protocol_version: u8) -> Res<Vec<u8>> {
         let mut length = 0;
         let PublishPacket {
             topic,
@@ -47,6 +48,7 @@ impl PacketEncoder {
             message_id,
             properties,
             payload,
+            ..
         } = packet;
         let qos = fixed.qos;
 
@@ -67,15 +69,16 @@ impl PacketEncoder {
             length += 2;
         }
 
+        println!("WRITING PUBLISH {:?} {:?}", properties, self.buf);
         // mqtt5 properties
-        let properties_data = PropertyEncoder::encode(properties, 5)?;
+        let properties_data = PropertyEncoder::encode(properties, protocol_version)?;
         length += properties_data.len();
 
         // Header
-        self.write_header(fixed);
+        self.write_header(fixed.clone());
 
         // Remaining length
-        self.write_variable_num(length as u32);
+        self.write_variable_num(length as u32)?;
 
         // Topic
         self.write_utf8_string(topic);

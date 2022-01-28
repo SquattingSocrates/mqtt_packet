@@ -12,7 +12,8 @@ impl PacketEncoder {
         let ConfirmationPacket {
             fixed,
             properties,
-            reason_code,
+            pubcomp_reason_code,
+            puback_reason_code,
             message_id,
             ..
         } = packet;
@@ -43,17 +44,28 @@ impl PacketEncoder {
         self.buf.push(header);
 
         // Length
-        self.write_variable_num(length as u32);
+        self.write_variable_num(length as u32)?;
 
         // Message ID
         self.write_u16(message_id);
 
         // reason code in header
         if protocol_version == 5 {
-            if reason_code.is_none() {
-                return Err(format!("MQTT5 requires reason code in {:?}", fixed.cmd));
-            }
-            self.buf.push(reason_code.unwrap());
+            let code =
+                match (puback_reason_code, pubcomp_reason_code, fixed.cmd) {
+                    (Some(_), Some(_), _) => return Err(format!(
+                        "Only puback_reason_code OR pubcomp_reason_code can be set simultaneously"
+                    )),
+                    (Some(code), None, PacketType::Pubrec | PacketType::Puback) => code.to_byte(),
+                    (None, Some(code), PacketType::Pubcomp | PacketType::Pubrel) => code.to_byte(),
+                    (x, y, t) => {
+                        return Err(format!(
+                            "Invalid combination of confirmation type {:?} and codes {:?} | {:?}",
+                            t, x, y
+                        ))
+                    }
+                };
+            self.buf.push(code);
         }
 
         // properies mqtt 5
@@ -73,32 +85,34 @@ impl<R: io::Read> PacketDecoder<R> {
         let message_id = self.reader.read_u16()?;
         let mut packet = ConfirmationPacket {
             fixed,
-            reason_code: None,
+            pubcomp_reason_code: None,
+            puback_reason_code: None,
             properties: None,
             message_id,
             length,
         };
         if protocol_version == 5 {
-            if length > 2 {
+            let reason_code = if length > 2 {
                 // response code
-                let reason_code = self.reader.read_u8()?;
-                match packet.fixed.cmd {
-                    PacketType::Puback | PacketType::Pubrec => {
-                        ReasonCode::validate_puback_pubrec_code(reason_code)?;
-                    }
-                    PacketType::Pubrel | PacketType::Pubcomp => {
-                        ReasonCode::validate_pubcomp_pubrel_code(reason_code)?;
-                    }
-                    t => {
-                        return Err(format!(
+                self.reader.read_u8()?
+            } else {
+                0
+            };
+            // set correct reason code with either read code or
+            // from 0 = Success
+            match packet.fixed.cmd {
+                PacketType::Puback | PacketType::Pubrec => {
+                    packet.puback_reason_code = Some(PubackPubrecCode::from_byte(reason_code)?);
+                }
+                PacketType::Pubrel | PacketType::Pubcomp => {
+                    packet.pubcomp_reason_code = Some(PubcompPubrelCode::from_byte(reason_code)?);
+                }
+                t => {
+                    return Err(format!(
                         "Something went horribly wrong. Trying to decode confirmation from {:?}",
                         t
                     ))
-                    }
                 }
-                packet.reason_code = Some(reason_code);
-            } else {
-                packet.reason_code = Some(0)
             }
 
             if length > 3 {

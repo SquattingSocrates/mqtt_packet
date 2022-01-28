@@ -110,8 +110,7 @@ impl<R: io::Read> PacketDecoder<R> {
                 payload: None,
                 qos: connect_flags.will_qos,
                 retain: connect_flags.will_retain,
-                properties: WillProperties::default(),
-                // properties: Option<LastWillProperties>,
+                properties: None,
             })
         } else {
             None
@@ -129,11 +128,16 @@ impl<R: io::Read> PacketDecoder<R> {
         }
     }
 
-    fn parse_will_properties(&mut self) -> Res<WillProperties> {
-        let props = WillProperties::default();
+    fn parse_will_properties(&mut self) -> Res<Option<WillProperties>> {
         match self.reader.read_properties()? {
-            None => Ok(props),
-            Some(props) => WillProperties::from_properties(props),
+            None => Ok(None),
+            Some(props) => {
+                if props.is_empty() {
+                    Ok(None)
+                } else {
+                    Ok(Some(WillProperties::from_properties(props)?))
+                }
+            }
         }
     }
 }

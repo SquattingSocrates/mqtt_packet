@@ -3,6 +3,47 @@ use crate::packet::*;
 use crate::structure::*;
 use std::io;
 
+impl PacketEncoder {
+  pub fn encode_unsubscribe(
+    mut self,
+    packet: UnsubscribePacket,
+    protocol_version: u8,
+  ) -> Res<Vec<u8>> {
+    // Check message ID
+    let mut length = 2;
+
+    // add length of unsubscriptions
+    length += packet
+      .unsubscriptions
+      .iter()
+      .fold(0, |acc, unsub| acc + unsub.len() + 2);
+
+    // properies mqtt 5
+    println!("PROPERTIES  {:?}", packet.properties);
+    let properties_data = PropertyEncoder::encode(packet.properties, protocol_version)?;
+    println!("PROPERTIES DATA {:?}", properties_data);
+    length += properties_data.len();
+
+    // header
+    self.write_header(packet.fixed);
+
+    // Length
+    self.write_variable_num(length as u32)?;
+
+    // Message ID
+    self.write_u16(packet.message_id);
+
+    // properies mqtt 5
+    self.write_vec(properties_data);
+
+    // Unsubs
+    for unsub in packet.unsubscriptions {
+      self.write_utf8_string(unsub);
+    }
+    Ok(self.buf)
+  }
+}
+
 impl<R: io::Read> PacketDecoder<R> {
   pub fn decode_unsubscribe_with_length(
     &mut self,
@@ -10,10 +51,13 @@ impl<R: io::Read> PacketDecoder<R> {
     length: u32,
     protocol_version: u8,
   ) -> Res<UnsubscribePacket> {
+    let message_id = self.reader.read_u16()?;
     let mut packet = UnsubscribePacket {
       fixed,
       unsubscriptions: vec![],
       properties: None,
+      message_id,
+      length,
     };
 
     // Properties mqtt 5

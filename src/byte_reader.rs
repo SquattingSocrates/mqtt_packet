@@ -6,7 +6,7 @@ static VARBYTEINT_FIN_MASK: u32 = 0x80;
 
 pub struct ByteReader<R: Read> {
     reader: BufReader<R>,
-    read_limit: Option<u32>,
+    curr_limit: Option<u32>,
     read_limits: Vec<u32>,
 }
 
@@ -14,7 +14,7 @@ impl<R: Read> ByteReader<R> {
     pub fn new(reader: BufReader<R>) -> ByteReader<R> {
         ByteReader {
             reader,
-            read_limit: None,
+            curr_limit: None,
             read_limits: vec![],
         }
     }
@@ -22,34 +22,53 @@ impl<R: Read> ByteReader<R> {
     pub fn read_header(&mut self) -> Result<(u32, FixedHeader), String> {
         // There is at least one byte in the buffer
         let first = self.read_u8()?;
-        let fixed = FixedHeader::from_byte(first)?;
-        let length = self.read_variable_int()?;
-        Ok((length, fixed))
+        let fixed = FixedHeader::from_byte(first);
+        // always read variable length to know how much we need to discard
+        let length = self.read_variable_int();
+        let fixed = match fixed {
+            Err(e) => {
+                if length.is_ok() {
+                    self.take(length.unwrap());
+                    self.consume()?;
+                    self.reset_limit();
+                }
+                return Err(e);
+            }
+            Ok(f) => f,
+        };
+        // unfortunately here we can't do anything but close the connection
+        match length {
+            Err(e) => Err(e),
+            Ok(len) => {
+                self.take(len);
+                Ok((len, fixed))
+            }
+        }
     }
 
     /// sets a limit of reading, has to be used together
     /// with has_more() and reset_limit()
     pub fn take(&mut self, len: u32) {
-        if let Some(l) = self.read_limit {
+        if let Some(l) = self.curr_limit {
             if len >= l {
                 return;
             }
             // push alread subtracted number
             self.read_limits.push(l - len);
         }
-        self.read_limit = Some(len);
+        self.curr_limit = Some(len);
     }
 
-    // this function tracks the read_limit and imitates behaviour
+    // this function tracks the curr_limit and imitates behaviour
     // of "Reader::take" while actually reading
     fn limit(&mut self, l: u32) {
-        if let Some(len) = self.read_limit {
-            self.read_limit = if len >= l { Some(len - l) } else { None };
+        if let Some(len) = self.curr_limit {
+            self.curr_limit = if len >= l { Some(len - l) } else { None };
         }
     }
 
     fn ensure_limit(&mut self, take_attempt: u32) -> Result<(), String> {
-        if let Some(len) = self.read_limit {
+        if let Some(len) = self.curr_limit {
             if len < take_attempt {
                 return Err(format!("Cannot take more than {}", len));
             }
@@ -59,15 +78,14 @@ impl<R: Read> ByteReader<R> {
 
     /// resets limit if any was set
     pub fn reset_limit(&mut self) {
-        let vals = (self.read_limits.pop(), self.read_limit);
-        println!("RESETTING LIMIT {:?}", vals);
+        let vals = (self.read_limits.pop(), self.curr_limit);
         match vals {
             // if no previous limit was None we just do a complete reset
-            (None, _) => self.read_limit = None,
-            (x, None) => self.read_limit = x,
+            (None, _) => self.curr_limit = None,
+            (x, None) => self.curr_limit = x,
             // check if current limit has not been reached
             // and add back unfinished reads
-            (Some(l), Some(curr)) => self.read_limit = Some(l + curr),
+            (Some(l), Some(curr)) => self.curr_limit = Some(l + curr),
         }
     }
 
@@ -76,7 +94,6 @@ impl<R: Read> ByteReader<R> {
         let mut buf = vec![0; len as usize];
         match self.reader.read_exact(&mut buf) {
             Ok(_) => {
-                // println!("READ_LEN({}) = {:?}", len, buf);
                 self.limit(len);
                 Ok(buf)
             }
@@ -112,12 +129,20 @@ impl<R: Read> ByteReader<R> {
     }
 
     // reads utf-8 encoded strings with 2 bytes indicating length of string
-    pub fn read_utf8_string(&mut self) -> Result<String, String> {
-        let len = self.read_len(2)?;
-        let len = ((len[0] as u16) << 8) + (len[1] as u16);
+    pub fn read_utf8_string(&mut self) -> Res<String> {
+        let len = self.read_u16()?;
         match String::from_utf8(self.read_len(len as u32)?) {
             Ok(s) => Ok(s),
             Err(e) => Err(format!("Failed to read string: {:?}", e)),
+        }
+    }
+
+    // reads binary data with prepending 2 bytes indicating length of string
+    pub fn read_binary(&mut self) -> Res<Vec<u8>> {
+        let len = self.read_u16()?;
+        match self.read_len(len as u32) {
+            Ok(s) => Ok(s),
+            Err(e) => Err(format!("Failed to binary data: {:?}", e)),
         }
     }
 
@@ -138,13 +163,16 @@ impl<R: Read> ByteReader<R> {
                 break;
             }
         }
+        if num > VARBYTEINT_MAX {
+            return Err(format!("Invalid variable int {}", num));
+        }
         Ok(num)
     }
 
     pub fn has_more(&mut self) -> bool {
-        // if read_limit is anything other than Some(0)
+        // if curr_limit is anything other than Some(0)
         // rely on fill_buf
-        if let Some(0) = self.read_limit {
+        if let Some(0) = self.curr_limit {
             return false;
         }
         // TODO: switch to a better way to do this
@@ -159,7 +187,6 @@ impl<R: Read> ByteReader<R> {
         if length > 0 {
             self.take(length);
         }
-        println!("START DECODING {}", length);
         Ok(length)
     }
 
@@ -170,9 +197,9 @@ impl<R: Read> ByteReader<R> {
             0x02 => Ok((prop_type, PropType::U32(self.read_u32()?))), // message_expiry_interval
             0x03 => Ok((prop_type, PropType::String(self.read_utf8_string()?))), // content_type
             0x08 => Ok((prop_type, PropType::String(self.read_utf8_string()?))), // response_topic
-            0x09 => Ok((prop_type, PropType::String(self.read_utf8_string()?))), // correlation data
-            0x0B => Ok((prop_type, PropType::U32(self.read_u32()?))), // subscription identifier
-            0x23 => Ok((prop_type, PropType::U16(self.read_u16()?))), // topic alias
+            0x09 => Ok((prop_type, PropType::Binary(self.read_binary()?))), // correlation data
+            0x0B => Ok((prop_type, PropType::VarInt(self.read_variable_int()?))), // subscription identifier
+            0x23 => Ok((prop_type, PropType::U16(self.read_u16()?))),             // topic alias
             0x26 => {
                 // user properties
                 let name = self.read_utf8_string()?;
@@ -198,13 +225,15 @@ impl<R: Read> ByteReader<R> {
             0x28 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
             0x29 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
             0x2A => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
-            _ => Err("Invalid property code".to_string()),
+            _ => Err(format!("Invalid property code: {}", prop_type)),
         }
     }
 
     pub fn consume(&mut self) -> Res<Vec<u8>> {
-        if self.read_limit.is_some() {
-            self.read_len(self.read_limit.unwrap())
+        if let Some(n) = self.curr_limit {
+            let msg = self.read_len(n);
+            println!("CONSUMED {} {:?}", n, msg);
+            msg
         } else {
             Err("Cannot consume if no limit specified".to_string())
         }
@@ -218,18 +247,18 @@ impl<R: Read> ByteReader<R> {
             return Ok(None);
         }
         let mut user_properties = UserProperties::new();
-        let mut subscription_identifiers = vec![];
+        // let mut subscription_identifiers = vec![];
 
         // TODO: return Err when key is repeated, but not allowed to
         while self.has_more() {
             let prop = self.decode_property()?;
-            println!("DECODING PROP {:?}", prop);
             match prop {
                 (0x26, PropType::Pair(k, v)) => {
                     let p = user_properties.entry(k).or_insert(vec![]);
                     p.push(v);
                 }
-                (0x0B, PropType::U32(v)) => subscription_identifiers.push(v),
+                // parse variable byte int
+                // (0x0B, PropType::U32(next)) => subscription_identifiers.push(next),
                 x => props.push(x),
             }
         }
@@ -237,9 +266,9 @@ impl<R: Read> ByteReader<R> {
         if user_properties.len() > 0 {
             props.push((0x26, PropType::Map(user_properties)));
         }
-        if subscription_identifiers.len() > 0 {
-            props.push((0x0B, PropType::U32Vec(subscription_identifiers)))
-        }
+        // if subscription_identifiers.len() > 0 {
+        //     props.push((0x0B, PropType::U32Vec(subscription_identifiers)))
+        // }
         self.reset_limit();
         if props.is_empty() {
             return Ok(None);
@@ -368,6 +397,34 @@ mod test {
         reader.reset_limit();
         assert!(reader.has_more());
         assert_eq!(Ok(64), reader.read_u8());
+        assert_eq!(Ok(128), reader.read_u8());
+        // now we are done for real
+        assert_eq!(false, reader.has_more());
+    }
+
+    #[test]
+    // this is important since we might be
+    fn test_multiple_limits_discard() {
+        let src = Cursor::new(vec![0, 4, 8, 16, 32, 64, 128]);
+        let r = BufReader::new(src);
+        let mut reader = ByteReader::new(r);
+        reader.take(5);
+        assert_eq!(Ok(0), reader.read_u8());
+        // take less now, 4 were left
+        reader.take(3);
+        assert!(reader.has_more());
+        assert_eq!(Ok(4), reader.read_u8());
+        assert!(reader.has_more());
+        assert!(reader.consume().is_ok());
+        reader.reset_limit();
+        assert_eq!(Ok(32), reader.read_u8());
+        // should not have more because initial limit of 5 ends here
+        assert_eq!(false, reader.has_more());
+        // after another reset more of the buffer is available
+        reader.reset_limit();
+        assert_eq!(true, reader.has_more());
+        assert_eq!(Ok(64), reader.read_u8());
+        assert_eq!(true, reader.has_more());
         assert_eq!(Ok(128), reader.read_u8());
         // now we are done for real
         assert_eq!(false, reader.has_more());
