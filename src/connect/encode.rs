@@ -37,7 +37,6 @@ impl PacketEncoder {
 
     // ClientId might be omitted in 3.1.1 and 5, but only if cleanSession is set to 1
     if (client_id.is_empty() && protocol_version >= 4 && clean_session) || !client_id.is_empty() {
-      println!("LENGTH + CLIENT_ID {} {}", length, client_id.len());
       length += client_id.len() + 2;
     } else {
       if protocol_version < 4 {
@@ -48,15 +47,13 @@ impl PacketEncoder {
       }
     }
 
-    println!("LENGTH AFTER CLIENT ID {}", length);
     // "keep_alive" Must be a two byte number
     // also add connect flags
     length += 2 + 1;
 
     // mqtt5 properties
-    let properties_data = PropertyEncoder::encode(properties.clone(), protocol_version)?;
+    let properties_data = PropertyEncoder::encode(properties, protocol_version)?;
     length += properties_data.len();
-    println!("LENGTH AFTER PROPERTIES {} {:?}", length, properties_data);
 
     // If will exists...
     let mut will_retain = false;
@@ -122,7 +119,6 @@ impl PacketEncoder {
     // write header
     self.buf.push(fixed.encode());
     // length
-    print!("WRITING LENGTH {}", length);
     self.write_variable_num(length as u32)?;
     // protocol id and protocol version
     let proto_vec = match protocol_id {
@@ -133,9 +129,8 @@ impl PacketEncoder {
     self.write_vec(proto_vec);
     self.write_u8(protocol_version);
     // write connect flags
-    // println!("ENCODING CONNECT BYTE {:?}", packet);
     self.write_u8(
-      0 | ((has_username as u8) * 0x80) //user_name:  0x80 = (1 << 7)
+      ((has_username as u8) * 0x80) //user_name:  0x80 = (1 << 7)
       | ((has_password as u8) * 0x40) //password:  0x40 = (1 << 6)
       | ((will_retain as u8) * 0x20)  //will_retain:  0x20 = (1 << 5)
       | ((will_qos.unwrap_or(0) << 3) & 0x18)     //will_qos:  0x18 = 24 = ((1 << 4) + (1 << 3)),

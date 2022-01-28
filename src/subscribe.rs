@@ -1,4 +1,3 @@
-use crate::byte_reader::*;
 use crate::packet::*;
 use crate::structure::*;
 use std::io;
@@ -25,19 +24,15 @@ impl PacketEncoder {
                 return Err("Invalid subscriptions - empty topic".to_string());
             }
 
-            if protocol_version == 5 {
-                if sub.rh.is_none() || sub.rh.unwrap() > 2 {
-                    return Err("Invalid subscriptions - invalid Retain Handling".to_string());
-                }
+            if protocol_version == 5 && (sub.rh.is_none() || sub.rh.unwrap() > 2) {
+                return Err("Invalid subscriptions - invalid Retain Handling".to_string());
             }
 
             length += sub.topic.len() + 2 + 1;
         }
 
         // properies mqtt 5
-        println!("PROPERTIES  {:?}", packet.properties);
         let properties_data = PropertyEncoder::encode(packet.properties, protocol_version)?;
-        println!("PROPERTIES DATA {:?}", properties_data);
         length += properties_data.len();
 
         // header
@@ -53,7 +48,6 @@ impl PacketEncoder {
         self.write_vec(properties_data);
 
         // subscriptions payload
-        println!("ENCODING SUBS {:?}", packet.subscriptions);
         for sub in packet.subscriptions {
             self.write_utf8_string(sub.topic);
             let mut options = sub.qos.to_byte();
@@ -110,10 +104,8 @@ impl<R: io::Read> PacketDecoder<R> {
                 if options & 0xc0 > 0 {
                     return Err("Invalid subscribe topic flag bits, bits 7-6 must be 0".to_string());
                 }
-            } else {
-                if options & 0xfc > 0 {
-                    return Err("Invalid subscribe topic flag bits, bits 7-2 must be 0".to_string());
-                }
+            } else if options & 0xfc > 0 {
+                return Err("Invalid subscribe topic flag bits, bits 7-2 must be 0".to_string());
             }
 
             let qos = match options & 0x03 {

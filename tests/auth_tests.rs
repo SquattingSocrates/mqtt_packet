@@ -1,6 +1,5 @@
 mod tests {
     use mqtt_packet::byte_reader::*;
-    use mqtt_packet::connect::*;
     use mqtt_packet::packet::*;
     use mqtt_packet::structure::*;
     use std::io::{BufReader, Cursor};

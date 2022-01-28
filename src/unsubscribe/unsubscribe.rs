@@ -1,4 +1,3 @@
-use crate::byte_reader::*;
 use crate::packet::*;
 use crate::structure::*;
 use std::io;
@@ -19,9 +18,7 @@ impl PacketEncoder {
       .fold(0, |acc, unsub| acc + unsub.len() + 2);
 
     // properies mqtt 5
-    println!("PROPERTIES  {:?}", packet.properties);
     let properties_data = PropertyEncoder::encode(packet.properties, protocol_version)?;
-    println!("PROPERTIES DATA {:?}", properties_data);
     length += properties_data.len();
 
     // header

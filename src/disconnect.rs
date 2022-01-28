@@ -1,4 +1,3 @@
-use crate::byte_reader::*;
 use crate::packet::*;
 use crate::structure::*;
 use std::io;
@@ -45,17 +44,12 @@ impl PacketEncoder {
     ) -> Res<Vec<u8>> {
         let mut length = if protocol_version == 5 { 1 } else { 0 };
         // properies mqtt 5
-        println!(
-            "ENCODING DISCONNECT {:?}. Version: {}",
-            packet, protocol_version
-        );
         let properties_data = PropertyEncoder::encode(packet.properties, protocol_version)?;
         length += properties_data.len();
         // Header
         self.write_header(packet.fixed);
         // Length
         self.write_variable_num(length as u32)?;
-        println!("ADDED LENGTH {} to {:?}", length, self.buf);
         // reason code in header
         if protocol_version == 5 && packet.reason_code.is_some() {
             self.write_u8(packet.reason_code.unwrap().to_byte());

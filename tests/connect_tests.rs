@@ -1,6 +1,5 @@
 mod tests {
     use mqtt_packet::byte_reader::*;
-    use mqtt_packet::connect::*;
     use mqtt_packet::packet::*;
     use mqtt_packet::structure::*;
     use std::io::{BufReader, Cursor};
@@ -29,7 +28,7 @@ mod tests {
 
     #[test]
     fn decode_bytes_connect() {
-        let mut expected = ConnectPacket {
+        let expected = ConnectPacket {
             fixed: FixedHeader {
                 cmd: PacketType::Connect,
                 qos: 0,
@@ -37,7 +36,7 @@ mod tests {
                 retain: false,
             },
             length: 18,
-            protocol_id: Protocol::from_str("MQIsdp"),
+            protocol_id: Protocol::MQIsdp,
             protocol_version: 3,
             keep_alive: 30,
             clean_session: false,
@@ -47,7 +46,6 @@ mod tests {
             client_id: "test".to_string(),
             properties: None,
         };
-        let mut clone = expected.clone();
         let buf = vec![
             16, 18, // Header
             0, 6, // Protocol ID length
@@ -71,7 +69,7 @@ mod tests {
                 retain: false,
             },
             length: 18,
-            protocol_id: Protocol::from_str("MQIsdp"),
+            protocol_id: Protocol::MQIsdp,
             protocol_version: 3,
             keep_alive: 30,
             clean_session: false,

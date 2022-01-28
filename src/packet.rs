@@ -23,7 +23,7 @@ pub enum MqttPacket {
 }
 
 pub struct PacketDecoder<R: io::Read> {
-    pub(crate) reader: ByteReader<R>,
+    pub reader: ByteReader<R>,
 }
 
 impl<R: io::Read> PacketDecoder<R> {
@@ -31,14 +31,78 @@ impl<R: io::Read> PacketDecoder<R> {
         PacketDecoder { reader }
     }
 
+    /// Creates a new decoder and binds it to a stream
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::io;
+    /// let mut decoder = mqtt_packet::PacketDecoder::from_stream(io::Cursor::new(vec![192, 0])); // pingreq
+    /// while decoder.has_more() {
+    ///     decoder.decode_packet(5); // will parse packets of version 5
+    /// }
+    ///
+    ///
+    /// ```
+    pub fn from_stream(src: R) -> PacketDecoder<R> {
+        PacketDecoder::new(ByteReader::new(io::BufReader::new(src)))
+    }
+
+    /// Creates a new decoder and binds it to a BufReader
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::io;
+    /// let buf = io::BufReader::new(io::Cursor::new(vec![192, 0])); // pingreq
+    /// let mut decoder = mqtt_packet::PacketDecoder::from_bufreader(buf);
+    /// while decoder.has_more() {
+    ///     decoder.decode_packet(5); // will parse packets of version 5
+    /// }
+    ///
+    ///
+    /// ```
+    pub fn from_bufreader(buf: io::BufReader<R>) -> PacketDecoder<R> {
+        PacketDecoder::new(ByteReader::new(buf))
+    }
+
+    /// Decodes MQTT messages from an underlying readable
+    ///
+    /// If an error happens the decoder tries to get the packet length (variable length in in position 1-4)
+    /// and discard `length` bytes. It's up to the user of this crate to close connections/streams
+    /// that deliver invalid data if necessary
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::io;
+    /// let buf = io::BufReader::new(io::Cursor::new(vec![
+    ///        16, 18, // Header
+    ///        0, 6, // Protocol ID length
+    ///        77, 81, 73, 115, 100, 112, // Protocol ID
+    ///        3,   // Protocol version
+    ///        0,   // Connect flags
+    ///        0, 30, // Keepalive
+    ///        0, 4, // Client ID length
+    ///        116, 101, 115, 116, // Client ID
+    ///        // new packet here
+    ///        192, 0
+    /// ])); // pingreq
+    /// let mut decoder = mqtt_packet::PacketDecoder::from_bufreader(buf);
+    /// let mut protocol_version = 5;
+    /// while decoder.has_more() {
+    ///     let msg = decoder.decode_packet(protocol_version); // will parse packets of version 5
+    ///     // set the protocol version for a client on a stream
+    ///     if let Ok(mqtt_packet::MqttPacket::Connect(packet)) = msg {
+    ///         protocol_version = packet.protocol_version;
+    ///     }
+    /// }
+    ///
+    /// ```
     pub fn decode_packet(&mut self, protocol_version: u8) -> Res<MqttPacket> {
         let (length, fixed) = self.reader.read_header()?;
-        println!(
-            "GOT LENGTH AND HEADER {:?} {:?}. Version: {}",
-            length, fixed, protocol_version
-        );
         let dec = self.decode_by_type(fixed, length, protocol_version);
-        if let Err(_) = &dec {
+        if dec.is_err() {
             // TODO: this should probably return an Error that indicates some
             // critical failure
             self.reader.consume()?;
@@ -124,9 +188,8 @@ impl<R: io::Read> PacketDecoder<R> {
     }
 }
 
+#[derive(Default)]
 pub struct PacketEncoder {
-    //<W: io::Write> {
-    // pub(crate) writer: W,
     pub(crate) buf: Vec<u8>,
 }
 
@@ -135,7 +198,31 @@ impl PacketEncoder {
         PacketEncoder { buf: vec![] }
     }
 
-    pub fn encode(mut self, packet: MqttPacket, protocol_version: u8) -> Res<Vec<u8>> {
+    /// Encodes any MqttPacket
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mqtt_packet::*;
+    /// let packet = MqttPacket::Pingreq(PingreqPacket {
+    ///     fixed: FixedHeader {
+    ///         cmd: PacketType::Pingreq,
+    ///         qos: 0,
+    ///         dup: false,
+    ///         retain: false,
+    ///     },
+    /// });
+    /// assert_eq!(Ok(vec![
+    ///     192, 0, // Header
+    /// ]), mqtt_packet::PacketEncoder::encode_packet(packet, 5));
+    ///
+    ///
+    /// ```
+    pub fn encode_packet(packet: MqttPacket, protocol_version: u8) -> Res<Vec<u8>> {
+        PacketEncoder::new().encode(packet, protocol_version)
+    }
+
+    pub fn encode(self, packet: MqttPacket, protocol_version: u8) -> Res<Vec<u8>> {
         match packet {
             MqttPacket::Puback(packet)
             | MqttPacket::Pubrec(packet)
@@ -162,7 +249,6 @@ impl PacketEncoder {
     }
 
     pub fn encode_multibyte_num(message_id: u32) -> Vec<u8> {
-        // println!("SPLITTING MESSAGE_ID {}", message_id, message_id >> 8, message_id as u8);
         vec![(message_id >> 8) as u8, message_id as u8]
     }
 

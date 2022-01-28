@@ -33,8 +33,7 @@ pub struct AuthProperties {
 
 impl Properties<AuthProperties> for AuthProperties {
     fn to_pairs(self) -> Res<Vec<(u8, PropType)>> {
-        let mut out = vec![];
-        out.push((0x15, PropType::String(self.authentication_method)));
+        let mut out = vec![(0x15, PropType::String(self.authentication_method))];
         if let Some(s) = self.authentication_data {
             out.push((0x16, PropType::String(s)));
         }
@@ -120,10 +119,7 @@ impl Properties<PublishProperties> for PublishProperties {
     }
 
     fn to_pairs(self) -> Res<Vec<(u8, PropType)>> {
-        let mut out = vec![];
-        // if self.payload_format_indicator {
-        out.push((0x01, PropType::Bool(self.payload_format_indicator)));
-        // }
+        let mut out = vec![(0x01, PropType::Bool(self.payload_format_indicator))];
         if let Some(v) = self.message_expiry_interval {
             out.push((0x02, PropType::U32(v)));
         }
@@ -133,13 +129,13 @@ impl Properties<PublishProperties> for PublishProperties {
         if let Some(v) = self.response_topic {
             out.push((0x08, PropType::String(v)));
         }
-        if self.correlation_data.len() > 0 {
+        if !self.correlation_data.is_empty() {
             out.push((0x09, PropType::Binary(self.correlation_data)));
         }
         if !self.user_properties.is_empty() {
             out.push((0x26, PropType::Map(self.user_properties)));
         }
-        if self.subscription_identifiers.len() > 0 {
+        if !self.subscription_identifiers.is_empty() {
             for id in self.subscription_identifiers.iter() {
                 if *id > VARBYTEINT_MAX {
                     return Err(format!("Invalid subscription_identifier: {}", id));
@@ -187,7 +183,6 @@ impl Properties<SubscribeProperties> for SubscribeProperties {
         if !self.user_properties.is_empty() {
             out.push((0x26, PropType::Map(self.user_properties)));
         }
-        println!("GOT SUBSCRIBE PROPERTIES {:?}", out);
         Ok(out)
     }
 }
@@ -270,7 +265,7 @@ impl Properties<UnsubscribeProperties> for UnsubscribeProperties {
     }
 }
 
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WillProperties {
     /// default value is false, both if set to false
     /// and when no value was provided
@@ -284,20 +279,6 @@ pub struct WillProperties {
     /// 0 is default when no value was provided
     pub will_delay_interval: u32,
     pub user_properties: UserProperties,
-}
-
-impl Default for WillProperties {
-    fn default() -> WillProperties {
-        WillProperties {
-            payload_format_indicator: false,
-            message_expiry_interval: None,
-            content_type: None,
-            response_topic: None,
-            correlation_data: vec![],
-            will_delay_interval: 0,
-            user_properties: UserProperties::new(),
-        }
-    }
 }
 
 impl Properties<WillProperties> for WillProperties {
@@ -320,12 +301,12 @@ impl Properties<WillProperties> for WillProperties {
 
     fn to_pairs(self) -> Res<Vec<(u8, PropType)>> {
         let mut out = vec![];
-        if let v = self.will_delay_interval {
-            out.push((0x18, PropType::U32(v)));
-        }
-        if let v = self.payload_format_indicator {
-            out.push((0x01, PropType::Bool(v)));
-        }
+        // if let v = self.will_delay_interval {
+        out.push((0x18, PropType::U32(self.will_delay_interval)));
+        // }
+        // if let v = self.payload_format_indicator {
+        out.push((0x01, PropType::Bool(self.payload_format_indicator)));
+        // }
         if let Some(v) = self.message_expiry_interval {
             out.push((0x02, PropType::U32(v)));
         }
@@ -335,7 +316,7 @@ impl Properties<WillProperties> for WillProperties {
         if let Some(v) = self.response_topic {
             out.push((0x08, PropType::String(v)));
         }
-        if self.correlation_data.len() > 0 {
+        if !self.correlation_data.is_empty() {
             out.push((0x09, PropType::Binary(self.correlation_data)));
         }
         if !self.user_properties.is_empty() {
@@ -429,9 +410,9 @@ impl Properties<ConnackProperties> for ConnackProperties {
             out.push((0x26, PropType::Map(self.user_properties)));
         }
         // TODO remove irrefutable patterns, might need to change structure
-        if let v = self.session_expiry_interval {
-            out.push((0x11, PropType::U32(v)));
-        }
+        // if let v = self.session_expiry_interval {
+        out.push((0x11, PropType::U32(self.session_expiry_interval)));
+        // }
         if let Some(v) = self.assigned_client_identifier {
             out.push((0x12, PropType::String(v)));
         }
@@ -453,30 +434,34 @@ impl Properties<ConnackProperties> for ConnackProperties {
         if let Some(v) = self.reason_string {
             out.push((0x1F, PropType::String(v)));
         }
-        if let v = self.receive_maximum {
-            out.push((0x21, PropType::U16(v)));
-        }
-        if let v = self.topic_alias_maximum {
-            out.push((0x22, PropType::U16(v)));
-        }
-        if let v = self.maximum_qos {
-            out.push((0x24, PropType::U8(v)));
-        }
-        if let v = self.retain_available {
-            out.push((0x25, PropType::Bool(v)));
-        }
+        // TODO: check all properties and maybe change types to Option<value>
+        // if let v = self.receive_maximum {
+        out.push((0x21, PropType::U16(self.receive_maximum)));
+        // }
+        // if let v = self.topic_alias_maximum {
+        out.push((0x22, PropType::U16(self.topic_alias_maximum)));
+        // }
+        // if let v = self.maximum_qos {
+        out.push((0x24, PropType::U8(self.maximum_qos)));
+        // }
+        // if let v = self.retain_available {
+        out.push((0x25, PropType::Bool(self.retain_available)));
+        // }
         if let Some(v) = self.maximum_packet_size {
             out.push((0x27, PropType::U32(v)));
         }
-        if let v = self.wildcard_subscription_available {
-            out.push((0x28, PropType::Bool(v)));
-        }
-        if let v = self.subscription_identifiers_available {
-            out.push((0x29, PropType::Bool(v)));
-        }
-        if let v = self.shared_subscription_available {
-            out.push((0x2A, PropType::Bool(v)));
-        }
+        // if let v = self.wildcard_subscription_available {
+        out.push((0x28, PropType::Bool(self.wildcard_subscription_available)));
+        // }
+        // if let v = self.subscription_identifiers_available {
+        out.push((
+            0x29,
+            PropType::Bool(self.subscription_identifiers_available),
+        ));
+        // }
+        // if let v = self.shared_subscription_available {
+        out.push((0x2A, PropType::Bool(self.shared_subscription_available)));
+        // }
         Ok(out)
     }
 }
@@ -582,13 +567,10 @@ impl Properties<ConnectProperties> for ConnectProperties {
     }
 
     fn to_pairs(self) -> Res<Vec<(u8, PropType)>> {
-        let mut out = vec![];
-        // if self.session_expiry_interval {
-        out.push((0x11, PropType::U32(self.session_expiry_interval)));
-        // }
-        // if let v = self.receive_maximum {
-        out.push((0x21, PropType::U16(self.receive_maximum)));
-        // }
+        let mut out = vec![
+            (0x11, PropType::U32(self.session_expiry_interval)),
+            (0x21, PropType::U16(self.receive_maximum)),
+        ];
         if let Some(v) = self.maximum_packet_size {
             out.push((0x27, PropType::U32(v)));
         }

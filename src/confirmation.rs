@@ -25,9 +25,7 @@ impl PacketEncoder {
         };
 
         // properies mqtt 5
-        println!("PROPS {:?} {}", properties, length);
         let mut properties_data = PropertyEncoder::encode(properties, protocol_version)?;
-        println!("PROPERTIES_DATA IN PUBACK {:?} {}", properties_data, length);
         if properties_data[..] == [0] {
             properties_data = vec![];
         }
@@ -51,20 +49,22 @@ impl PacketEncoder {
 
         // reason code in header
         if protocol_version == 5 {
-            let code =
-                match (puback_reason_code, pubcomp_reason_code, fixed.cmd) {
-                    (Some(_), Some(_), _) => return Err(format!(
-                        "Only puback_reason_code OR pubcomp_reason_code can be set simultaneously"
-                    )),
-                    (Some(code), None, PacketType::Pubrec | PacketType::Puback) => code.to_byte(),
-                    (None, Some(code), PacketType::Pubcomp | PacketType::Pubrel) => code.to_byte(),
-                    (x, y, t) => {
-                        return Err(format!(
-                            "Invalid combination of confirmation type {:?} and codes {:?} | {:?}",
-                            t, x, y
-                        ))
-                    }
-                };
+            let code = match (puback_reason_code, pubcomp_reason_code, fixed.cmd) {
+                (Some(_), Some(_), t) => {
+                    return Err(format!(
+                    "Only puback_reason_code OR pubcomp_reason_code can be set simultaneously {:?}",
+                    t
+                ))
+                }
+                (Some(code), None, PacketType::Pubrec | PacketType::Puback) => code.to_byte(),
+                (None, Some(code), PacketType::Pubcomp | PacketType::Pubrel) => code.to_byte(),
+                (x, y, t) => {
+                    return Err(format!(
+                        "Invalid combination of confirmation type {:?} and codes {:?} | {:?}",
+                        t, x, y
+                    ))
+                }
+            };
             self.buf.push(code);
         }
 

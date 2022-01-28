@@ -36,5 +36,8 @@ Messages of these versions should be decodable/encodable with this library.
 
 
 - [ ] A better command building API?
+- [ ] Make only necessary code public
 - [ ] Support for Maximum Packet Size (MQTTv5). Should not send certain properties if they "bloat" the packet
-- [ ] ...
+- [ ] Ensure all properties have the correct Optionality set in their types
+- [ ] Add some fuzzing tests to prevent unwanted panic! calls
+- [ ] Improve documentation

@@ -42,7 +42,6 @@ impl PacketEncoder {
         let mut length = 1;
 
         // properies mqtt 5
-        println!("PROPERTIES  {:?}", packet.properties);
         let properties_data = PropertyEncoder::encode(packet.properties, protocol_version)?;
         length += properties_data.len();
 

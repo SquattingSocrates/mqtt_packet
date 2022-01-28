@@ -1,4 +1,3 @@
-use crate::byte_reader::*;
 use crate::packet::*;
 use crate::structure::*;
 use serde::{Deserialize, Serialize};
@@ -12,11 +11,7 @@ impl<R: io::Read> PacketDecoder<R> {
     ) -> Result<ConnectPacket, String> {
         // Parse protocolId
         let protocol_id = self.reader.read_utf8_string()?;
-        let protocol_id = match &protocol_id[..] {
-            "MQTT" => Protocol::Mqtt,
-            "MQIsdp" => Protocol::MQIsdp,
-            s => return Err(format!("Invalid protocolId {}", s)),
-        };
+        let protocol_id = Protocol::from_source(&protocol_id)?;
         // Parse constants version number
         let mut protocol_version = self.reader.read_u8()?;
         if !self.reader.has_more() {
@@ -32,9 +27,6 @@ impl<R: io::Read> PacketDecoder<R> {
             return Err("Invalid protocol version".to_string());
         }
 
-        // if !self.reader.has_more() {
-        //     return Err("Packet too short".to_string());
-        // }
         let (connect_flags, last_will) = self.decode_connect_flags()?;
         // Parse keepalive
         let keep_alive = self.reader.read_u16()?;
@@ -42,9 +34,7 @@ impl<R: io::Read> PacketDecoder<R> {
         // Start parsing payload
         // Parse client_id
         let client_id = self.reader.read_utf8_string()?;
-        println!("GOT CLIENT ID {}", client_id);
-        let last_will = if connect_flags.will && last_will.is_some() {
-            let mut will = last_will.unwrap();
+        let last_will = if let (Some(mut will), true) = (last_will, connect_flags.will) {
             if protocol_version == 5 {
                 will.properties = self.parse_will_properties()?;
             }
@@ -54,7 +44,8 @@ impl<R: io::Read> PacketDecoder<R> {
             will.payload = Some(self.reader.read_utf8_string()?);
             Some(will)
         } else {
-            last_will
+            // since connect_flags.will = false, we don't really care about the last will
+            None
         };
 
         // Parse username
@@ -69,7 +60,6 @@ impl<R: io::Read> PacketDecoder<R> {
             password = Some(self.reader.read_utf8_string()?);
         }
         // need for right parse auth packet and self set up
-        // this.settings = packet
         Ok(ConnectPacket {
             fixed,
             length,
@@ -154,7 +144,6 @@ pub struct ConnectFlags {
 
 impl ConnectFlags {
     pub fn new(byte: u8) -> ConnectFlags {
-        println!("GOT CONNECT BYTE {}. {} {}", byte, byte & 0x4, byte & 0x18);
         ConnectFlags {
             user_name: (byte & 0x80) != 0,    // 0x80 = (1 << 7)
             password: (byte & 0x40) != 0,     // 0x40 = (1 << 6)

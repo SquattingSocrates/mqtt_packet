@@ -54,7 +54,7 @@ impl PacketEncoder {
 
         // Topic must be a non-empty string or Buffer
         length += 2 + topic.len();
-        if topic.len() == 0 {
+        if topic.is_empty() {
             return Err("Invalid topic".to_string());
         }
 
@@ -69,13 +69,12 @@ impl PacketEncoder {
             length += 2;
         }
 
-        println!("WRITING PUBLISH {:?} {:?}", properties, self.buf);
         // mqtt5 properties
         let properties_data = PropertyEncoder::encode(properties, protocol_version)?;
         length += properties_data.len();
 
         // Header
-        self.write_header(fixed.clone());
+        self.write_header(fixed);
 
         // Remaining length
         self.write_variable_num(length as u32)?;

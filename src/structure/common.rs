@@ -11,13 +11,12 @@ pub enum Protocol {
 }
 
 impl Protocol {
-    pub fn from_str(s: &str) -> Protocol {
-        match s {
+    pub fn from_source(s: &str) -> Res<Protocol> {
+        Ok(match s {
             "MQIsdp" => Protocol::MQIsdp,
             "MQTT" => Protocol::Mqtt,
-            // TODO: return a result
-            _ => Protocol::Mqtt,
-        }
+            s => return Err(format!("Invalid protocolId {}", s)),
+        })
     }
 }
 

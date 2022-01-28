@@ -1,6 +1,5 @@
 mod tests {
     use mqtt_packet::byte_reader::*;
-    use mqtt_packet::connect::*;
     use mqtt_packet::packet::*;
     use mqtt_packet::structure::*;
     use std::io::{BufReader, Cursor};
@@ -17,12 +16,6 @@ mod tests {
         println!("Failed encode {}", name);
         let encoder = PacketEncoder::new();
         assert_eq!(buf, encoder.encode(packet, protocol_version).unwrap());
-    }
-
-    fn test_encode(name: &str, packet: MqttPacket, buf: Vec<u8>) {
-        println!("Failed encode {}", name);
-        let encoder = PacketEncoder::new();
-        assert_eq!(buf, encoder.encode(packet, 5).unwrap());
     }
 
     fn test_decode_error(msg: &str, buf: Vec<u8>, protocol_version: u8) {

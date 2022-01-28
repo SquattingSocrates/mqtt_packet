@@ -103,7 +103,7 @@ impl<R: Read> ByteReader<R> {
 
     pub fn read_u8(&mut self) -> Result<u8, String> {
         let d = self.read_len(1)?;
-        if d.len() > 0 {
+        if !d.is_empty() {
             Ok(d[0])
         } else {
             Err("Failed to read byte".to_string())
@@ -231,9 +231,7 @@ impl<R: Read> ByteReader<R> {
 
     pub fn consume(&mut self) -> Res<Vec<u8>> {
         if let Some(n) = self.curr_limit {
-            let msg = self.read_len(n);
-            println!("CONSUMED {} {:?}", n, msg);
-            msg
+            self.read_len(n)
         } else {
             Err("Cannot consume if no limit specified".to_string())
         }
@@ -241,7 +239,6 @@ impl<R: Read> ByteReader<R> {
 
     pub fn read_properties(&mut self) -> Res<Option<Vec<(u8, PropType)>>> {
         let mut props = vec![];
-        println!("STARTiNG TO READ PROPS {:?}", self.has_more());
         // zero length properties are also valid
         if self.start_properties_decode()? == 0 {
             return Ok(None);
@@ -263,12 +260,9 @@ impl<R: Read> ByteReader<R> {
             }
         }
 
-        if user_properties.len() > 0 {
+        if !user_properties.is_empty() {
             props.push((0x26, PropType::Map(user_properties)));
         }
-        // if subscription_identifiers.len() > 0 {
-        //     props.push((0x0B, PropType::U32Vec(subscription_identifiers)))
-        // }
         self.reset_limit();
         if props.is_empty() {
             return Ok(None);

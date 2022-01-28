@@ -1,6 +1,5 @@
 mod tests {
     use mqtt_packet::byte_reader::*;
-    use mqtt_packet::connect::*;
     use mqtt_packet::packet::*;
     use mqtt_packet::structure::*;
     use std::io::{BufReader, Cursor};
@@ -373,26 +372,4 @@ mod tests {
             5,
         );
     }
-
-    // #[test]
-    // fn test_encode_error_1() {
-    //     test_error_encode(
-    //         "Length var byte integer over max allowed value throws error",
-    //         MqttPacket::Publish(PublishPacket {
-    //             fixed: FixedHeader {
-    //                 cmd: PacketType::Publish,
-    //                 qos: 0,
-    //                 dup: false,
-    //                 retain: false,
-    //             },
-    //             length: 268435456,
-    //             properties: None,
-    //             topic: "test".to_string(),
-    //             payload: vec![0],
-    //             message_id: None,
-    //         }),
-    //         "Invalid variable byte integer: 268435456",
-    //         3,
-    //     );
-    // }
 }

@@ -1,5 +1,4 @@
 use mqtt_packet::byte_reader::*;
-use mqtt_packet::connack::*;
 use mqtt_packet::packet::*;
 use mqtt_packet::structure::*;
 use std::io::{BufReader, Cursor};
@@ -31,12 +30,6 @@ fn test_parse_error(name: &str, msg: String, buf: Vec<u8>) {
   println!("Failed: {}", name);
   let mut decoder = dec_from_buf(buf);
   assert_eq!(Err(msg), decoder.decode_packet(3));
-}
-
-fn test_encode_error(name: &str, packet: ConnackPacket, msg: String) {
-  let encoder = PacketEncoder::new();
-  println!("Failed: {}", name);
-  assert_eq!(Err(msg), encoder.encode_connack(packet, 3));
 }
 
 #[test]
