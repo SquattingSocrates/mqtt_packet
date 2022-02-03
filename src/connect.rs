@@ -1,6 +1,8 @@
 use crate::byte_reader::ByteReader;
 use crate::mqtt_writer::MqttWriter;
 use crate::structure::*;
+#[cfg(feature = "serde_support")]
+use serde::{Deserialize, Serialize};
 use std::io;
 
 const MQISDP_BUF: [u8; 6] = [b'M', b'Q', b'I', b's', b'd', b'p'];

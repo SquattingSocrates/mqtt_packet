@@ -5,6 +5,8 @@ use crate::byte_reader::ByteReader;
 pub use codes::*;
 pub use common::*;
 pub use properties::*;
+#[cfg(feature = "serde_support")]
+use serde::{Deserialize, Serialize};
 use std::io;
 
 pub trait Packet: Sized {

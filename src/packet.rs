@@ -1,5 +1,7 @@
 use crate::byte_reader::ByteReader;
 use crate::structure::*;
+#[cfg(feature = "serde_support")]
+use serde::{Deserialize, Serialize};
 use std::io;
 
 #[derive(Debug, PartialEq, Clone)]

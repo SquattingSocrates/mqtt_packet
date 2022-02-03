@@ -1,6 +1,8 @@
 use super::codes::*;
 use super::common::*;
 use crate::mqtt_writer::MqttWriter;
+#[cfg(feature = "serde_support")]
+use serde::{Deserialize, Serialize};
 
 /// Turn any particular type of PropertiesObject
 /// to list of code - Value pairs

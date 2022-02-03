@@ -1,13 +1,12 @@
+#[cfg(feature = "serde_support")]
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub type UserProperties = HashMap<String, Vec<String>>;
 pub type Res<T> = Result<T, String>;
 
 #[derive(PartialEq, Debug, Clone)]
-#[cfg_attr(
-    feature = "serde_support",
-    derive(serde::Serialize, serde::Deserialize)
-)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub enum Protocol {
     Mqtt,
     MQIsdp,
@@ -24,10 +23,7 @@ impl Protocol {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-#[cfg_attr(
-    feature = "serde_support",
-    derive(serde::Serialize, serde::Deserialize)
-)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub enum QoS {
     QoS0,
     QoS1,
@@ -135,7 +131,7 @@ impl PacketType {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-#[cfg_attr(feature = "serde_support", derive(serde::Serialize, Deserialize))]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub enum PacketType {
     Reserved,
     Connect,
