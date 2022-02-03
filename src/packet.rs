@@ -121,68 +121,85 @@ impl<R: io::Read> PacketDecoder<R> {
         length: u32,
         protocol_version: u8,
     ) -> Res<MqttPacket> {
+        // let reader = self.reader.take(length);
         Ok(match fixed.cmd {
             PacketType::Connect => {
-                MqttPacket::Connect(self.decode_connect_with_length(fixed, length)?)
+                // passing protocol_version is unnecessary here
+                MqttPacket::Connect(ConnectPacket::decode(&mut self.reader, fixed, length, 5)?)
             }
             PacketType::Connack => MqttPacket::Connack(self.decode_connack_with_length(
                 fixed,
                 length,
                 protocol_version,
             )?),
-            PacketType::Subscribe => MqttPacket::Subscribe(self.decode_subscribe_with_length(
+            PacketType::Subscribe => MqttPacket::Subscribe(SubscribePacket::decode(
+                &mut self.reader,
                 fixed,
                 length,
                 protocol_version,
             )?),
-            PacketType::Suback => MqttPacket::Suback(self.decode_suback_with_length(
+            PacketType::Suback => MqttPacket::Suback(SubackPacket::decode(
+                &mut self.reader,
                 fixed,
                 length,
                 protocol_version,
             )?),
-            PacketType::Publish => MqttPacket::Publish(self.decode_publish_with_length(
+            PacketType::Publish => MqttPacket::Publish(PublishPacket::decode(
+                &mut self.reader,
                 fixed,
                 length,
                 protocol_version,
             )?),
-            PacketType::Puback => MqttPacket::Puback(self.decode_confirmation_with_length(
+            PacketType::Puback => MqttPacket::Puback(ConfirmationPacket::decode(
+                &mut self.reader,
                 fixed,
                 length,
                 protocol_version,
             )?),
-            PacketType::Pubrec => MqttPacket::Pubrec(self.decode_confirmation_with_length(
+            PacketType::Pubrec => MqttPacket::Pubrec(ConfirmationPacket::decode(
+                &mut self.reader,
                 fixed,
                 length,
                 protocol_version,
             )?),
-            PacketType::Pubrel => MqttPacket::Pubrel(self.decode_confirmation_with_length(
+            PacketType::Pubrel => MqttPacket::Pubrel(ConfirmationPacket::decode(
+                &mut self.reader,
                 fixed,
                 length,
                 protocol_version,
             )?),
-            PacketType::Pubcomp => MqttPacket::Pubcomp(self.decode_confirmation_with_length(
+            PacketType::Pubcomp => MqttPacket::Pubcomp(ConfirmationPacket::decode(
+                &mut self.reader,
                 fixed,
                 length,
                 protocol_version,
             )?),
-            PacketType::Unsubscribe => MqttPacket::Unsubscribe(
-                self.decode_unsubscribe_with_length(fixed, length, protocol_version)?,
-            ),
-            PacketType::Unsuback => MqttPacket::Unsuback(self.decode_unsuback_with_length(
+            PacketType::Unsubscribe => MqttPacket::Unsubscribe(UnsubscribePacket::decode(
+                &mut self.reader,
                 fixed,
                 length,
                 protocol_version,
             )?),
-            PacketType::Pingreq => MqttPacket::Pingreq(PingreqPacket { fixed }),
-            PacketType::Pingresp => MqttPacket::Pingresp(PingrespPacket { fixed }),
-            PacketType::Disconnect => MqttPacket::Disconnect(self.decode_disconnect_with_length(
+            PacketType::Unsuback => MqttPacket::Unsuback(UnsubackPacket::decode(
+                &mut self.reader,
                 fixed,
                 length,
                 protocol_version,
             )?),
-            PacketType::Auth => {
-                MqttPacket::Auth(self.decode_auth_with_length(fixed, length, protocol_version)?)
-            }
+            PacketType::Pingreq => MqttPacket::Pingreq(PingreqPacket),
+            PacketType::Pingresp => MqttPacket::Pingresp(PingrespPacket),
+            PacketType::Disconnect => MqttPacket::Disconnect(DisconnectPacket::decode(
+                &mut self.reader,
+                fixed,
+                length,
+                protocol_version,
+            )?),
+            PacketType::Auth => MqttPacket::Auth(AuthPacket::decode(
+                &mut self.reader,
+                fixed,
+                length,
+                protocol_version,
+            )?),
             PacketType::Reserved => return Err("Cannot use RESERVED message type".to_string()),
         })
     }
@@ -227,18 +244,18 @@ impl PacketEncoder {
             MqttPacket::Puback(packet)
             | MqttPacket::Pubrec(packet)
             | MqttPacket::Pubrel(packet)
-            | MqttPacket::Pubcomp(packet) => self.encode_confirmation(packet, protocol_version),
-            MqttPacket::Suback(packet) => self.encode_suback(packet, protocol_version),
-            MqttPacket::Subscribe(packet) => self.encode_subscribe(packet, protocol_version),
-            MqttPacket::Publish(packet) => self.encode_publish(packet, protocol_version),
-            MqttPacket::Connect(packet) => self.encode_connect(packet),
-            MqttPacket::Connack(packet) => self.encode_connack(packet, protocol_version),
-            MqttPacket::Unsubscribe(packet) => self.encode_unsubscribe(packet, protocol_version),
-            MqttPacket::Unsuback(packet) => self.encode_unsuback(packet, protocol_version),
-            MqttPacket::Disconnect(packet) => self.encode_disconnect(packet, protocol_version),
-            MqttPacket::Pingreq(packet) => self.write_empty(packet.fixed),
-            MqttPacket::Pingresp(packet) => self.write_empty(packet.fixed),
-            MqttPacket::Auth(packet) => self.encode_auth(packet, protocol_version),
+            | MqttPacket::Pubcomp(packet) => packet.encode(protocol_version),
+            MqttPacket::Suback(packet) => packet.encode(protocol_version),
+            MqttPacket::Subscribe(packet) => packet.encode(protocol_version),
+            MqttPacket::Publish(packet) => packet.encode(protocol_version),
+            MqttPacket::Connect(packet) => packet.encode(protocol_version),
+            MqttPacket::Connack(packet) => packet.encode(protocol_version),
+            MqttPacket::Unsubscribe(packet) => packet.encode(protocol_version),
+            MqttPacket::Unsuback(packet) => packet.encode(protocol_version),
+            MqttPacket::Disconnect(packet) => packet.encode(protocol_version),
+            MqttPacket::Pingreq(packet) => packet.encode(protocol_version),
+            MqttPacket::Pingresp(packet) => packet.encode(protocol_version),
+            MqttPacket::Auth(packet) => packet.encode(protocol_version),
         }
     }
 
@@ -319,88 +336,88 @@ impl PacketEncoder {
     }
 }
 
-pub struct PropertyEncoder {
-    writer: PacketEncoder,
-}
-impl PropertyEncoder {
-    fn new() -> PropertyEncoder {
-        PropertyEncoder {
-            writer: PacketEncoder::new(),
-        }
-    }
+// pub struct PropertyEncoder {
+//     writer: PacketEncoder,
+// }
+// impl PropertyEncoder {
+//     fn new() -> PropertyEncoder {
+//         PropertyEncoder {
+//             writer: PacketEncoder::new(),
+//         }
+//     }
 
-    pub(crate) fn encode<T: Properties<T>>(props: Option<T>, protocol_version: u8) -> Res<Vec<u8>> {
-        // Confirm should not add empty property length with no properties (rfc 3.4.2.2.1)
-        if protocol_version == 5 {
-            if props.is_some() {
-                let pairs = props.unwrap().to_pairs()?;
-                let mut v = PropertyEncoder::new().write_properties(pairs)?;
-                // dirty hack
-                for b in PacketEncoder::encode_variable_num(v.len() as u32) {
-                    v.insert(0, b);
-                }
-                Ok(v)
-            } else {
-                Ok(vec![0]) // empty properties
-            }
-        } else {
-            Ok(vec![]) // no properties exist in MQTT < 5
-        }
-    }
+//     pub(crate) fn encode<T: Properties<T>>(props: Option<T>, protocol_version: u8) -> Res<Vec<u8>> {
+//         // Confirm should not add empty property length with no properties (rfc 3.4.2.2.1)
+//         if protocol_version == 5 {
+//             if props.is_some() {
+//                 let pairs = props.unwrap().to_pairs()?;
+//                 let mut v = PropertyEncoder::new().write_properties(pairs)?;
+//                 // dirty hack
+//                 for b in PacketEncoder::encode_variable_num(v.len() as u32) {
+//                     v.insert(0, b);
+//                 }
+//                 Ok(v)
+//             } else {
+//                 Ok(vec![0]) // empty properties
+//             }
+//         } else {
+//             Ok(vec![]) // no properties exist in MQTT < 5
+//         }
+//     }
 
-    pub fn write_properties(mut self, props: Vec<(u8, PropType)>) -> Res<Vec<u8>> {
-        for prop in props {
-            match prop {
-                (code, PropType::U32(v)) => {
-                    self.writer.write_u8(code);
-                    self.writer.write_u32(v);
-                }
-                (code, PropType::U16(v)) => {
-                    self.writer.write_u8(code);
-                    self.writer.write_u16(v)
-                }
-                (code, PropType::U8(v)) => {
-                    self.writer.write_u8(code);
-                    self.writer.write_u8(v)
-                }
-                (code, PropType::String(v)) => {
-                    self.writer.write_u8(code);
-                    self.writer.write_utf8_string(v)
-                }
-                (code, PropType::Binary(v)) => {
-                    self.writer.write_u8(code);
-                    self.writer.write_binary(v)
-                }
-                // should never happen actually
-                (_, PropType::Pair(_, _)) => {}
-                // write code code and two strings for each key-value
-                // pair
-                (code, PropType::Map(map)) => {
-                    for (k, v) in map.into_iter() {
-                        // split into pairs
-                        for val in v {
-                            self.writer.write_u8(code);
-                            self.writer.write_utf8_string(k.to_string());
-                            self.writer.write_utf8_string(val);
-                        }
-                    }
-                }
-                (code, PropType::VarInt(num)) => {
-                    self.writer.write_u8(code);
-                    self.writer.write_variable_num(num)?;
-                }
-                (code, PropType::Bool(v)) => {
-                    self.writer.write_u8(code);
-                    self.writer.write_u8(v as u8)
-                }
-                (code, PropType::U32Vec(v)) => {
-                    self.writer.write_u8(code);
-                    for num in v {
-                        self.writer.write_u32(num);
-                    }
-                }
-            }
-        }
-        Ok(self.writer.buf)
-    }
-}
+//     pub fn write_properties(mut self, props: Vec<(u8, PropType)>) -> Res<Vec<u8>> {
+//         for prop in props {
+//             match prop {
+//                 (code, PropType::U32(v)) => {
+//                     self.writer.write_u8(code);
+//                     self.writer.write_u32(v);
+//                 }
+//                 (code, PropType::U16(v)) => {
+//                     self.writer.write_u8(code);
+//                     self.writer.write_u16(v)
+//                 }
+//                 (code, PropType::U8(v)) => {
+//                     self.writer.write_u8(code);
+//                     self.writer.write_u8(v)
+//                 }
+//                 (code, PropType::String(v)) => {
+//                     self.writer.write_u8(code);
+//                     self.writer.write_utf8_string(v)
+//                 }
+//                 (code, PropType::Binary(v)) => {
+//                     self.writer.write_u8(code);
+//                     self.writer.write_binary(v)
+//                 }
+//                 // should never happen actually
+//                 (_, PropType::Pair(_, _)) => {}
+//                 // write code code and two strings for each key-value
+//                 // pair
+//                 (code, PropType::Map(map)) => {
+//                     for (k, v) in map.into_iter() {
+//                         // split into pairs
+//                         for val in v {
+//                             self.writer.write_u8(code);
+//                             self.writer.write_utf8_string(k.to_string());
+//                             self.writer.write_utf8_string(val);
+//                         }
+//                     }
+//                 }
+//                 (code, PropType::VarInt(num)) => {
+//                     self.writer.write_u8(code);
+//                     self.writer.write_variable_num(num)?;
+//                 }
+//                 (code, PropType::Bool(v)) => {
+//                     self.writer.write_u8(code);
+//                     self.writer.write_u8(v as u8)
+//                 }
+//                 (code, PropType::U32Vec(v)) => {
+//                     self.writer.write_u8(code);
+//                     for num in v {
+//                         self.writer.write_u32(num);
+//                     }
+//                 }
+//             }
+//         }
+//         Ok(self.writer.buf)
+//     }
+// }

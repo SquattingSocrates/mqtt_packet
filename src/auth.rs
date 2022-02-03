@@ -1,10 +1,43 @@
-use crate::packet::*;
+use crate::byte_reader::ByteReader;
+use crate::mqtt_writer::MqttWriter;
 use crate::structure::*;
 use std::io;
 
-impl<R: io::Read> PacketDecoder<R> {
-    pub fn decode_auth_with_length(
-        &mut self,
+impl Packet for AuthPacket {
+    /// This
+    fn encode(&self, protocol_version: u8) -> Res<Vec<u8>> {
+        if protocol_version != 5 {
+            return Err(format!(
+                "Invalid mqtt version for auth packet {}",
+                protocol_version
+            ));
+        }
+        // Check message ID
+        let mut length = 1;
+
+        // properies mqtt 5
+        let properties_data =
+            Properties::encode_option(self.properties.as_ref(), protocol_version)?;
+        length += properties_data.len();
+
+        let mut writer = MqttWriter::new(length);
+        // header
+        writer.write_header(FixedHeader::for_type(PacketType::Auth));
+
+        // Length
+        writer.write_variable_num(length as u32)?;
+
+        // reason code
+        writer.write_u8(self.reason_code.to_byte());
+
+        // properies mqtt 5
+        writer.write_sized(properties_data, protocol_version == 5)?;
+
+        Ok(writer.into_vec())
+    }
+
+    fn decode<R: io::Read>(
+        reader: &mut ByteReader<R>,
         fixed: FixedHeader,
         length: u32,
         protocol_version: u8,
@@ -19,44 +52,12 @@ impl<R: io::Read> PacketDecoder<R> {
             properties: None,
             length,
         };
-        packet.reason_code = AuthCode::from_byte(self.reader.read_u8()?)?;
+        packet.reason_code = AuthCode::from_byte(reader.read_u8()?)?;
         // properies mqtt 5
-        packet.properties = match self.reader.read_properties()? {
+        packet.properties = match reader.read_properties()? {
             None => None,
             Some(props) => Some(AuthProperties::from_properties(props)?),
         };
         Ok(packet)
-    }
-}
-
-impl PacketEncoder {
-    /// This
-    pub fn encode_auth(mut self, packet: AuthPacket, protocol_version: u8) -> Res<Vec<u8>> {
-        if protocol_version != 5 {
-            return Err(format!(
-                "Invalid mqtt version for auth packet {}",
-                protocol_version
-            ));
-        }
-        // Check message ID
-        let mut length = 1;
-
-        // properies mqtt 5
-        let properties_data = PropertyEncoder::encode(packet.properties, protocol_version)?;
-        length += properties_data.len();
-
-        // header
-        self.write_header(packet.fixed);
-
-        // Length
-        self.write_variable_num(length as u32)?;
-
-        // reason code
-        self.write_u8(packet.reason_code.to_byte());
-
-        // properies mqtt 5
-        self.write_vec(properties_data);
-
-        Ok(self.buf)
     }
 }

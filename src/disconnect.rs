@@ -1,24 +1,23 @@
-use crate::packet::*;
+use crate::byte_reader::ByteReader;
+use crate::mqtt_writer::MqttWriter;
 use crate::structure::*;
 use std::io;
 
-impl<R: io::Read> PacketDecoder<R> {
-    pub fn decode_disconnect_with_length(
-        &mut self,
+impl Packet for DisconnectPacket {
+    fn decode<R: io::Read>(
+        reader: &mut ByteReader<R>,
         fixed: FixedHeader,
         length: u32,
         protocol_version: u8,
     ) -> Res<DisconnectPacket> {
         let mut packet = DisconnectPacket {
-            fixed,
             reason_code: None,
             properties: None,
-            length,
         };
         if protocol_version == 5 {
             // response code
             if length > 0 {
-                let reason_code = self.reader.read_u8()?;
+                let reason_code = reader.read_u8()?;
                 // validate disconnect code
                 let reason_code = DisconnectCode::from_byte(reason_code)?;
                 packet.reason_code = Some(reason_code);
@@ -26,7 +25,7 @@ impl<R: io::Read> PacketDecoder<R> {
                 packet.reason_code = Some(DisconnectCode::NormalDisconnection);
             }
             // properies mqtt 5
-            packet.properties = match self.reader.read_properties()? {
+            packet.properties = match reader.read_properties()? {
                 None => None,
                 Some(props) => Some(DisconnectProperties::from_properties(props)?),
             };
@@ -34,28 +33,24 @@ impl<R: io::Read> PacketDecoder<R> {
 
         Ok(packet)
     }
-}
 
-impl PacketEncoder {
-    pub fn encode_disconnect(
-        mut self,
-        packet: DisconnectPacket,
-        protocol_version: u8,
-    ) -> Res<Vec<u8>> {
+    fn encode(&self, protocol_version: u8) -> Res<Vec<u8>> {
         let mut length = if protocol_version == 5 { 1 } else { 0 };
         // properies mqtt 5
-        let properties_data = PropertyEncoder::encode(packet.properties, protocol_version)?;
+        let properties_data =
+            Properties::encode_option(self.properties.as_ref(), protocol_version)?;
         length += properties_data.len();
+        let mut writer = MqttWriter::new(length);
         // Header
-        self.write_header(packet.fixed);
+        writer.write_header(FixedHeader::for_type(PacketType::Disconnect));
         // Length
-        self.write_variable_num(length as u32)?;
+        writer.write_variable_num(length as u32)?;
         // reason code in header
-        if protocol_version == 5 && packet.reason_code.is_some() {
-            self.write_u8(packet.reason_code.unwrap().to_byte());
+        if protocol_version == 5 && self.reason_code.is_some() {
+            writer.write_u8(self.reason_code.as_ref().unwrap().to_byte());
         }
         // properies mqtt 5
-        self.write_vec(properties_data);
-        Ok(self.buf)
+        writer.write_vec(properties_data);
+        Ok(writer.into_vec())
     }
 }

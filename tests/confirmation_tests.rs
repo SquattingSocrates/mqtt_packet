@@ -36,7 +36,7 @@ mod tests {
     fn test_encode(name: &str, packet: ConfirmationPacket, buf: Vec<u8>) {
         println!("Failed encode {}", name);
         let encoder = PacketEncoder::new();
-        assert_eq!(buf, encoder.encode_confirmation(packet, 5).unwrap());
+        assert_eq!(buf, packet.encode(5).unwrap());
     }
 
     fn test_decode_error(msg: &str, buf: Vec<u8>) {

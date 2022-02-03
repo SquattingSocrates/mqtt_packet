@@ -1,25 +1,59 @@
 use super::codes::*;
 use super::common::*;
+use crate::mqtt_writer::MqttWriter;
 use serde::{Deserialize, Serialize};
 
 /// Turn any particular type of PropertiesObject
 /// to list of code - Value pairs
-pub(crate) trait Properties<T> {
-    fn to_pairs(self) -> Res<Vec<(u8, PropType)>>;
-    fn from_properties(props: Vec<(u8, PropType)>) -> Res<T>;
+pub(crate) trait Properties: Sized {
+    fn to_pairs(&self) -> Res<Vec<(u8, PropType)>>;
+    fn from_properties(props: Vec<(u8, PropType)>) -> Res<Self>;
+
+    /// packet.encode() will move the value since a packet is usually built to
+    /// be encoded and sent anyway
+    fn encode(&self) -> Res<Vec<u8>> {
+        // Confirm should not add empty property length with no properties (rfc 3.4.2.2.1)
+        let pairs = self.to_pairs()?;
+        if pairs.is_empty() {
+            return Ok(vec![0]); // empty properties
+        }
+        // TODO: calculate size of properties before allocating buffer
+        let mut writer = MqttWriter::new(100);
+        writer.write_properties(pairs)?;
+        Ok(writer.into_vec())
+    }
+
+    fn encode_option(props: Option<&Self>, protocol_version: u8) -> Res<Vec<u8>> {
+        // Confirm should not add empty property length with no properties (rfc 3.4.2.2.1)
+        if protocol_version == 5 {
+            if let Some(p) = props {
+                return p.encode();
+            } else {
+                Ok(vec![0]) // empty properties
+            }
+        } else {
+            Ok(vec![]) // no properties exist in MQTT < 5
+        }
+    }
 }
 
 #[derive(Debug)]
-pub enum PropType {
+pub enum PropType<'a> {
     U32(u32),
     U16(u16),
     U8(u8),
+    Str(&'a str),
     String(String),
     Pair(String, String),
     Map(UserProperties),
+    /// since when decoding we need to move the map
+    /// it's better to keep two separate variants for
+    /// refs and values
+    MapRef(&'a UserProperties),
     Bool(bool),
     U32Vec(Vec<u32>),
     Binary(Vec<u8>),
+    BinaryRef(&'a [u8]),
     VarInt(u32),
 }
 
@@ -31,17 +65,17 @@ pub struct AuthProperties {
     pub user_properties: UserProperties,
 }
 
-impl Properties<AuthProperties> for AuthProperties {
-    fn to_pairs(self) -> Res<Vec<(u8, PropType)>> {
-        let mut out = vec![(0x15, PropType::String(self.authentication_method))];
-        if let Some(s) = self.authentication_data {
-            out.push((0x16, PropType::String(s)));
+impl Properties for AuthProperties {
+    fn to_pairs(&self) -> Res<Vec<(u8, PropType)>> {
+        let mut out = vec![(0x15, PropType::Str(&self.authentication_method))];
+        if let Some(s) = self.authentication_data.as_ref() {
+            out.push((0x16, PropType::Str(s)));
         }
-        if let Some(s) = self.reason_string {
-            out.push((0x1F, PropType::String(s)));
+        if let Some(s) = self.reason_string.as_ref() {
+            out.push((0x1F, PropType::Str(s)));
         }
         if !self.user_properties.is_empty() {
-            out.push((0x26, PropType::Map(self.user_properties)));
+            out.push((0x26, PropType::Map(self.user_properties.clone())));
         }
         Ok(out)
     }
@@ -83,7 +117,7 @@ pub struct PublishProperties {
     pub user_properties: UserProperties,
 }
 
-impl Properties<PublishProperties> for PublishProperties {
+impl Properties for PublishProperties {
     fn from_properties(props: Vec<(u8, PropType)>) -> Res<PublishProperties> {
         let mut user_properties = UserProperties::new();
         let mut payload_format_indicator = false;
@@ -118,7 +152,7 @@ impl Properties<PublishProperties> for PublishProperties {
         })
     }
 
-    fn to_pairs(self) -> Res<Vec<(u8, PropType)>> {
+    fn to_pairs(&self) -> Res<Vec<(u8, PropType)>> {
         let mut out = vec![(0x01, PropType::Bool(self.payload_format_indicator))];
         if let Some(v) = self.message_expiry_interval {
             out.push((0x02, PropType::U32(v)));
@@ -126,14 +160,14 @@ impl Properties<PublishProperties> for PublishProperties {
         if let Some(v) = self.topic_alias {
             out.push((0x23, PropType::U16(v)));
         }
-        if let Some(v) = self.response_topic {
-            out.push((0x08, PropType::String(v)));
+        if let Some(v) = self.response_topic.as_ref() {
+            out.push((0x08, PropType::Str(v)));
         }
         if !self.correlation_data.is_empty() {
-            out.push((0x09, PropType::Binary(self.correlation_data)));
+            out.push((0x09, PropType::BinaryRef(&self.correlation_data)));
         }
         if !self.user_properties.is_empty() {
-            out.push((0x26, PropType::Map(self.user_properties)));
+            out.push((0x26, PropType::MapRef(&self.user_properties)));
         }
         if !self.subscription_identifiers.is_empty() {
             for id in self.subscription_identifiers.iter() {
@@ -143,8 +177,8 @@ impl Properties<PublishProperties> for PublishProperties {
                 out.push((0x0B, PropType::VarInt(*id)));
             }
         }
-        if let Some(v) = self.content_type {
-            out.push((0x03, PropType::String(v)));
+        if let Some(v) = self.content_type.as_ref() {
+            out.push((0x03, PropType::Str(v)));
         }
         Ok(out)
     }
@@ -159,7 +193,7 @@ pub struct SubscribeProperties {
     pub user_properties: UserProperties,
 }
 
-impl Properties<SubscribeProperties> for SubscribeProperties {
+impl Properties for SubscribeProperties {
     fn from_properties(props: Vec<(u8, PropType)>) -> Res<SubscribeProperties> {
         let mut subscription_identifier = 0;
         let mut user_properties = UserProperties::new();
@@ -175,13 +209,13 @@ impl Properties<SubscribeProperties> for SubscribeProperties {
             user_properties,
         })
     }
-    fn to_pairs(self) -> Res<Vec<(u8, PropType)>> {
+    fn to_pairs(&self) -> Res<Vec<(u8, PropType)>> {
         let mut out = vec![];
         if self.subscription_identifier > 0 {
             out.push((0x0B, PropType::VarInt(self.subscription_identifier)));
         }
         if !self.user_properties.is_empty() {
-            out.push((0x26, PropType::Map(self.user_properties)));
+            out.push((0x26, PropType::MapRef(&self.user_properties)));
         }
         Ok(out)
     }
@@ -195,7 +229,7 @@ pub struct DisconnectProperties {
     pub user_properties: UserProperties,
 }
 
-impl Properties<DisconnectProperties> for DisconnectProperties {
+impl Properties for DisconnectProperties {
     fn from_properties(prop_list: Vec<(u8, PropType)>) -> Res<DisconnectProperties> {
         let mut props = DisconnectProperties {
             session_expiry_interval: None,
@@ -215,19 +249,19 @@ impl Properties<DisconnectProperties> for DisconnectProperties {
         Ok(props)
     }
 
-    fn to_pairs(self) -> Res<Vec<(u8, PropType)>> {
+    fn to_pairs(&self) -> Res<Vec<(u8, PropType)>> {
         let mut out = vec![];
         if let Some(s) = self.session_expiry_interval {
             out.push((0x11, PropType::U32(s)));
         }
-        if let Some(v) = self.reason_string {
-            out.push((0x1F, PropType::String(v)));
+        if let Some(v) = self.reason_string.as_ref() {
+            out.push((0x1F, PropType::Str(v)));
         }
         if !self.user_properties.is_empty() {
-            out.push((0x26, PropType::Map(self.user_properties)));
+            out.push((0x26, PropType::MapRef(&self.user_properties)));
         }
-        if let Some(v) = self.server_reference {
-            out.push((0x1C, PropType::String(v)));
+        if let Some(v) = self.server_reference.as_ref() {
+            out.push((0x1C, PropType::Str(v)));
         }
         Ok(out)
     }
@@ -244,7 +278,7 @@ pub struct UnsubscribeProperties {
     pub user_properties: UserProperties,
 }
 
-impl Properties<UnsubscribeProperties> for UnsubscribeProperties {
+impl Properties for UnsubscribeProperties {
     fn from_properties(props: Vec<(u8, PropType)>) -> Res<UnsubscribeProperties> {
         let mut user_properties = UserProperties::new();
         for p in props {
@@ -256,10 +290,10 @@ impl Properties<UnsubscribeProperties> for UnsubscribeProperties {
         Ok(UnsubscribeProperties { user_properties })
     }
 
-    fn to_pairs(self) -> Res<Vec<(u8, PropType)>> {
+    fn to_pairs(&self) -> Res<Vec<(u8, PropType)>> {
         let mut out = vec![];
         if !self.user_properties.is_empty() {
-            out.push((0x26, PropType::Map(self.user_properties)));
+            out.push((0x26, PropType::MapRef(&self.user_properties)));
         }
         Ok(out)
     }
@@ -281,7 +315,7 @@ pub struct WillProperties {
     pub user_properties: UserProperties,
 }
 
-impl Properties<WillProperties> for WillProperties {
+impl Properties for WillProperties {
     fn from_properties(props: Vec<(u8, PropType)>) -> Res<WillProperties> {
         let mut out = WillProperties::default();
         for p in props {
@@ -299,7 +333,7 @@ impl Properties<WillProperties> for WillProperties {
         Ok(out)
     }
 
-    fn to_pairs(self) -> Res<Vec<(u8, PropType)>> {
+    fn to_pairs(&self) -> Res<Vec<(u8, PropType)>> {
         let mut out = vec![];
         // if let v = self.will_delay_interval {
         out.push((0x18, PropType::U32(self.will_delay_interval)));
@@ -310,17 +344,17 @@ impl Properties<WillProperties> for WillProperties {
         if let Some(v) = self.message_expiry_interval {
             out.push((0x02, PropType::U32(v)));
         }
-        if let Some(v) = self.content_type {
-            out.push((0x03, PropType::String(v)));
+        if let Some(v) = self.content_type.as_ref() {
+            out.push((0x03, PropType::Str(v)));
         }
-        if let Some(v) = self.response_topic {
-            out.push((0x08, PropType::String(v)));
+        if let Some(v) = self.response_topic.as_ref() {
+            out.push((0x08, PropType::Str(v)));
         }
         if !self.correlation_data.is_empty() {
-            out.push((0x09, PropType::Binary(self.correlation_data)));
+            out.push((0x09, PropType::BinaryRef(&self.correlation_data)));
         }
         if !self.user_properties.is_empty() {
-            out.push((0x26, PropType::Map(self.user_properties)));
+            out.push((0x26, PropType::Map(self.user_properties.clone())));
         }
         Ok(out)
     }
@@ -375,7 +409,7 @@ impl Default for ConnackProperties {
     }
 }
 
-impl Properties<ConnackProperties> for ConnackProperties {
+impl Properties for ConnackProperties {
     fn from_properties(props: Vec<(u8, PropType)>) -> Res<ConnackProperties> {
         let mut out = ConnackProperties::default();
         for p in props {
@@ -404,35 +438,35 @@ impl Properties<ConnackProperties> for ConnackProperties {
         Ok(out)
     }
 
-    fn to_pairs(self) -> Res<Vec<(u8, PropType)>> {
+    fn to_pairs(&self) -> Res<Vec<(u8, PropType)>> {
         let mut out = vec![];
         if !self.user_properties.is_empty() {
-            out.push((0x26, PropType::Map(self.user_properties)));
+            out.push((0x26, PropType::Map(self.user_properties.clone())));
         }
         // TODO remove irrefutable patterns, might need to change structure
         // if let v = self.session_expiry_interval {
         out.push((0x11, PropType::U32(self.session_expiry_interval)));
         // }
-        if let Some(v) = self.assigned_client_identifier {
-            out.push((0x12, PropType::String(v)));
+        if let Some(v) = self.assigned_client_identifier.as_ref() {
+            out.push((0x12, PropType::Str(v)));
         }
         if let Some(v) = self.server_keep_alive {
             out.push((0x13, PropType::U16(v)));
         }
-        if let Some(v) = self.authentication_method {
-            out.push((0x15, PropType::String(v)));
+        if let Some(v) = self.authentication_method.as_ref() {
+            out.push((0x15, PropType::Str(v)));
         }
-        if let Some(v) = self.authentication_data {
-            out.push((0x16, PropType::String(v)));
+        if let Some(v) = self.authentication_data.as_ref() {
+            out.push((0x16, PropType::Str(v)));
         }
-        if let Some(v) = self.response_information {
-            out.push((0x1A, PropType::String(v)));
+        if let Some(v) = self.response_information.as_ref() {
+            out.push((0x1A, PropType::Str(v)));
         }
-        if let Some(v) = self.server_reference {
-            out.push((0x1C, PropType::String(v)));
+        if let Some(v) = self.server_reference.as_ref() {
+            out.push((0x1C, PropType::Str(v)));
         }
-        if let Some(v) = self.reason_string {
-            out.push((0x1F, PropType::String(v)));
+        if let Some(v) = self.reason_string.as_ref() {
+            out.push((0x1F, PropType::Str(v)));
         }
         // TODO: check all properties and maybe change types to Option<value>
         // if let v = self.receive_maximum {
@@ -479,7 +513,7 @@ pub struct ConfirmationPacket {
     pub message_id: u16,
 }
 
-impl Properties<ConfirmationProperties> for ConfirmationProperties {
+impl Properties for ConfirmationProperties {
     fn from_properties(props: Vec<(u8, PropType)>) -> Res<ConfirmationProperties> {
         let mut reason_string = None;
         let mut user_properties = UserProperties::new();
@@ -496,13 +530,13 @@ impl Properties<ConfirmationProperties> for ConfirmationProperties {
         })
     }
 
-    fn to_pairs(self) -> Res<Vec<(u8, PropType)>> {
+    fn to_pairs(&self) -> Res<Vec<(u8, PropType)>> {
         let mut out = vec![];
-        if let Some(s) = self.reason_string {
-            out.push((0x1F, PropType::String(s)));
+        if let Some(s) = self.reason_string.as_ref() {
+            out.push((0x1F, PropType::Str(s)));
         }
         if !self.user_properties.is_empty() {
-            out.push((0x26, PropType::Map(self.user_properties)));
+            out.push((0x26, PropType::MapRef(&self.user_properties)));
         }
         Ok(out)
     }
@@ -546,7 +580,7 @@ impl Default for ConnectProperties {
     }
 }
 
-impl Properties<ConnectProperties> for ConnectProperties {
+impl Properties for ConnectProperties {
     fn from_properties(props: Vec<(u8, PropType)>) -> Res<ConnectProperties> {
         let mut out = ConnectProperties::default();
         for p in props {
@@ -566,7 +600,7 @@ impl Properties<ConnectProperties> for ConnectProperties {
         Ok(out)
     }
 
-    fn to_pairs(self) -> Res<Vec<(u8, PropType)>> {
+    fn to_pairs(&self) -> Res<Vec<(u8, PropType)>> {
         let mut out = vec![
             (0x11, PropType::U32(self.session_expiry_interval)),
             (0x21, PropType::U16(self.receive_maximum)),
@@ -584,13 +618,13 @@ impl Properties<ConnectProperties> for ConnectProperties {
         out.push((0x17, PropType::Bool(self.request_problem_information)));
         // }
         // if let v = self.user_properties {
-        out.push((0x26, PropType::Map(self.user_properties)));
+        out.push((0x26, PropType::MapRef(&self.user_properties)));
         // }
-        if let Some(v) = self.authentication_method {
-            out.push((0x15, PropType::String(v)));
+        if let Some(v) = self.authentication_method.as_ref() {
+            out.push((0x15, PropType::Str(v)));
         }
-        if let Some(v) = self.authentication_data {
-            out.push((0x16, PropType::String(v)));
+        if let Some(v) = self.authentication_data.as_ref() {
+            out.push((0x16, PropType::Str(v)));
         }
         Ok(out)
     }

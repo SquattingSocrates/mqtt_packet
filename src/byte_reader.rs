@@ -193,38 +193,23 @@ impl<R: Read> ByteReader<R> {
     fn decode_property(&mut self) -> Result<(u8, PropType), String> {
         let prop_type = self.read_u8()?;
         match prop_type {
-            0x01 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))), // payload_format_indicator
-            0x02 => Ok((prop_type, PropType::U32(self.read_u32()?))), // message_expiry_interval
-            0x03 => Ok((prop_type, PropType::String(self.read_utf8_string()?))), // content_type
-            0x08 => Ok((prop_type, PropType::String(self.read_utf8_string()?))), // response_topic
+            0x02 | 0x18 | 0x11 | 0x27 => Ok((prop_type, PropType::U32(self.read_u32()?))),
+            0x01 | 0x17 | 0x19 | 0x25 | 0x28 | 0x29 | 0x2A => {
+                Ok((prop_type, PropType::Bool(self.read_bool_byte()?)))
+            }
+            0x03 | 0x08 | 0x15 | 0x16 | 0x12 | 0x1A | 0x1C | 0x1F => {
+                Ok((prop_type, PropType::String(self.read_utf8_string()?)))
+            }
+            0x23 | 0x21 | 0x22 | 0x13 => Ok((prop_type, PropType::U16(self.read_u16()?))),
             0x09 => Ok((prop_type, PropType::Binary(self.read_binary()?))), // correlation data
             0x0B => Ok((prop_type, PropType::VarInt(self.read_variable_int()?))), // subscription identifier
-            0x23 => Ok((prop_type, PropType::U16(self.read_u16()?))),             // topic alias
             0x26 => {
                 // user properties
                 let name = self.read_utf8_string()?;
                 let value = self.read_utf8_string()?;
                 Ok((prop_type, PropType::Pair(name, value)))
             }
-            0x18 => Ok((prop_type, PropType::U32(self.read_u32()?))), // will delay interval
-            0x11 => Ok((prop_type, PropType::U32(self.read_u32()?))),
-            0x15 => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
-            0x16 => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
-            0x17 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
-            0x19 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
-            0x21 => Ok((prop_type, PropType::U16(self.read_u16()?))),
-            0x22 => Ok((prop_type, PropType::U16(self.read_u16()?))),
-            0x27 => Ok((prop_type, PropType::U32(self.read_u32()?))),
-            0x12 => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
-            0x13 => Ok((prop_type, PropType::U16(self.read_u16()?))),
-            0x1A => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
-            0x1C => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
-            0x1F => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
             0x24 => Ok((prop_type, PropType::U8(self.read_u8()?))),
-            0x25 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
-            0x28 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
-            0x29 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
-            0x2A => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
             _ => Err(format!("Invalid property code: {}", prop_type)),
         }
     }
@@ -263,13 +248,84 @@ impl<R: Read> ByteReader<R> {
         if !user_properties.is_empty() {
             props.push((0x26, PropType::Map(user_properties)));
         }
-        self.reset_limit();
+        let _ = self.reset_limit();
         if props.is_empty() {
             return Ok(None);
         }
         Ok(Some(props))
     }
 }
+
+// struct PropertiesIterator<R: Read> {
+//     reader: ByteReader<R>,
+// }
+
+// impl<R: Read> PropertiesIterator<R> {
+//     pub fn new(reader: ByteReader<R>) -> PropertiesIterator<R> {
+//         PropertiesIterator { reader }
+//     }
+// }
+
+// impl<'a, R: Read> Iterator for PropertiesIterator<R> {
+//     type Item = (u8, PropType<'a>);
+
+//     fn next(&mut self) -> Option<(u8, PropType<'a>)> {
+//         if !self.reader.has_more() {
+//             return None;
+//         }
+//         // let prop = self.reader.decode_property();
+//         match self.reader.read_u8() {
+//             Err(e) => None,
+//             // Ok((0x26, PropType::Pair(k, v))) => {
+//             //     let p = user_properties.entry(k).or_insert(vec![]);
+//             //     p.push(v);
+//             // }
+//             // parse variable byte int
+//             // (0x0B, PropType::U32(next)) => subscription_identifiers.push(next),
+//             Ok(prop_type) => {
+//                 let p = match prop_type {
+//                     0x01 => (prop_type, PropType::Bool(self.reader.read_bool_byte())), // payload_format_indicator
+//                     0x02 => (prop_type, PropType::U32(self.read_u32())), // message_expiry_interval
+//                     0x03 => (prop_type, PropType::String(self.read_utf8_string())), // content_type
+//                     0x08 => (prop_type, PropType::String(self.read_utf8_string())), // response_topic
+//                     0x09 => (prop_type, PropType::Binary(self.read_binary())), // correlation data
+//                     0x0B => (prop_type, PropType::VarInt(self.read_variable_int())), // subscription identifier
+//                     0x23 => (prop_type, PropType::U16(self.read_u16())),             // topic alias
+//                     // 0x26 => {
+//                     //     // user properties
+//                     //     let name = self.read_utf8_string();
+//                     //     let value = self.read_utf8_string();
+//                     //     (prop_type, PropType::Pair(name, value))
+//                     // }
+//                     // 0x18 => Ok((prop_type, PropType::U32(self.read_u32()?))), // will delay interval
+//                     // 0x11 => Ok((prop_type, PropType::U32(self.read_u32()?))),
+//                     // 0x15 => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
+//                     // 0x16 => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
+//                     // 0x17 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
+//                     // 0x19 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
+//                     // 0x21 => Ok((prop_type, PropType::U16(self.read_u16()?))),
+//                     // 0x22 => Ok((prop_type, PropType::U16(self.read_u16()?))),
+//                     // 0x27 => Ok((prop_type, PropType::U32(self.read_u32()?))),
+//                     // 0x12 => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
+//                     // 0x13 => Ok((prop_type, PropType::U16(self.read_u16()?))),
+//                     // 0x1A => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
+//                     // 0x1C => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
+//                     // 0x1F => Ok((prop_type, PropType::String(self.read_utf8_string()?))),
+//                     // 0x24 => Ok((prop_type, PropType::U8(self.read_u8()?))),
+//                     // 0x25 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
+//                     // 0x28 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
+//                     // 0x29 => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
+//                     // 0x2A => Ok((prop_type, PropType::Bool(self.read_bool_byte()?))),
+//                     _ => Err(format!("Invalid property code: {}", prop_type)),
+//             };
+//             match p {
+//                 Ok(x) => Some(x),
+//                 Err(e) => None
+//             }
+//         }
+//         }
+//     }
+// }
 
 mod test {
     use crate::byte_reader::*;

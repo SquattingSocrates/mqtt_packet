@@ -1,77 +1,74 @@
+use crate::byte_reader::ByteReader;
+use crate::mqtt_writer::MqttWriter;
 use crate::packet::*;
 use crate::structure::*;
 use std::io;
 
-impl PacketEncoder {
-  pub fn encode_unsubscribe(
-    mut self,
-    packet: UnsubscribePacket,
-    protocol_version: u8,
-  ) -> Res<Vec<u8>> {
+impl Packet for UnsubscribePacket {
+  /// This
+  fn encode(&self, protocol_version: u8) -> Res<Vec<u8>> {
     // Check message ID
     let mut length = 2;
 
     // add length of unsubscriptions
-    length += packet
+    length += self
       .unsubscriptions
       .iter()
       .fold(0, |acc, unsub| acc + unsub.len() + 2);
 
     // properies mqtt 5
-    let properties_data = PropertyEncoder::encode(packet.properties, protocol_version)?;
+    let properties_data = Properties::encode_option(self.properties.as_ref(), protocol_version)?;
     length += properties_data.len();
-
+    let mut writer = MqttWriter::new(length);
     // header
-    self.write_header(packet.fixed);
+    writer.write_header(FixedHeader::for_type(PacketType::Unsubscribe));
 
     // Length
-    self.write_variable_num(length as u32)?;
+    writer.write_variable_num(length as u32)?;
 
     // Message ID
-    self.write_u16(packet.message_id);
+    writer.write_u16(self.message_id);
 
     // properies mqtt 5
-    self.write_vec(properties_data);
+    writer.write_variable_num(properties_data.len() as u32)?;
+    writer.write_vec(properties_data);
 
     // Unsubs
-    for unsub in packet.unsubscriptions {
-      self.write_utf8_string(unsub);
+    for unsub in self.unsubscriptions.iter() {
+      writer.write_utf8_str(&unsub);
     }
-    Ok(self.buf)
+    Ok(writer.into_vec())
   }
-}
 
-impl<R: io::Read> PacketDecoder<R> {
-  pub fn decode_unsubscribe_with_length(
-    &mut self,
+  fn decode<R: io::Read>(
+    reader: &mut ByteReader<R>,
     fixed: FixedHeader,
     length: u32,
     protocol_version: u8,
-  ) -> Res<UnsubscribePacket> {
-    let message_id = self.reader.read_u16()?;
+  ) -> Res<Self> {
+    let message_id = reader.read_u16()?;
     let mut packet = UnsubscribePacket {
-      fixed,
+      qos: fixed.qos,
       unsubscriptions: vec![],
       properties: None,
       message_id,
-      length,
     };
 
     // Properties mqtt 5
     if protocol_version == 5 {
-      packet.properties = match self.reader.read_properties()? {
+      packet.properties = match reader.read_properties()? {
         None => None,
         Some(props) => Some(UnsubscribeProperties::from_properties(props)?),
       };
     }
 
-    if !self.reader.has_more() {
+    if !reader.has_more() {
       return Err("Malformed unsubscribe, no payload specified".to_string());
     }
 
-    while self.reader.has_more() {
+    while reader.has_more() {
       // Parse topic
-      let topic = self.reader.read_utf8_string()?;
+      let topic = reader.read_utf8_string()?;
       // Push topic to unsubscriptions
       packet.unsubscriptions.push(topic);
     }

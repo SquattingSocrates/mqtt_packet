@@ -2,9 +2,22 @@ use serde::{Deserialize, Serialize};
 mod codes;
 mod common;
 mod properties;
+use crate::byte_reader::ByteReader;
 pub use codes::*;
 pub use common::*;
 pub use properties::*;
+use std::io;
+
+pub trait Packet: Sized {
+    fn encode(&self, protocol_version: u8) -> Res<Vec<u8>>;
+    fn decode<R: io::Read>(
+        reader: &mut ByteReader<R>,
+        fixed: FixedHeader,
+        length: u32,
+        protocol_version: u8,
+    ) -> Res<Self>;
+    // fn matches(t: PacketType) -> bool;
+}
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct AuthPacket {
@@ -41,8 +54,8 @@ pub struct ConnectPacket {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ConnackPacket {
-    pub fixed: FixedHeader,
-    pub length: u32,
+    // pub fixed: FixedHeader,
+    // pub length: u32,
     pub return_code: Option<u8>,
     pub reason_code: Option<u8>,
     pub session_present: bool,
@@ -52,8 +65,8 @@ pub struct ConnackPacket {
 impl Default for ConnackPacket {
     fn default() -> ConnackPacket {
         ConnackPacket {
-            fixed: FixedHeader::for_type(PacketType::Connack),
-            length: 0,
+            // fixed: FixedHeader::for_type(PacketType::Connack),
+            // length: 0,
             return_code: None,
             reason_code: None,
             session_present: false,
@@ -64,20 +77,19 @@ impl Default for ConnackPacket {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct DisconnectPacket {
-    pub fixed: FixedHeader,
     // only exists in MQTT 5
     pub reason_code: Option<DisconnectCode>,
     pub properties: Option<DisconnectProperties>,
-    pub length: u32,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 /// Captures value of published message
 pub struct PublishPacket {
-    pub fixed: FixedHeader,
+    pub dup: bool,
+    pub qos: u8,
+    pub retain: bool,
     pub topic: String,
     pub message_id: Option<u16>,
-    pub length: u32,
     /// No assumptions are made about the structure
     /// and content of payload
     pub payload: Vec<u8>,
@@ -122,8 +134,7 @@ pub struct Subscription {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct SubscribePacket {
-    pub fixed: FixedHeader,
-    pub length: u32,
+    pub qos: u8,
     pub subscriptions: Vec<Subscription>,
     pub properties: Option<SubscribeProperties>,
     pub message_id: u16,
@@ -132,8 +143,6 @@ pub struct SubscribePacket {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 /// Packet that holds information of subscription acknowledgement (SUBACK)
 pub struct SubackPacket {
-    pub fixed: FixedHeader,
-    pub length: u32,
     pub reason_code: Option<u8>,
     pub message_id: u16,
     pub properties: Option<ConfirmationProperties>,
@@ -145,8 +154,7 @@ pub struct SubackPacket {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct UnsubscribePacket {
-    pub fixed: FixedHeader,
-    pub length: u32,
+    pub qos: u8,
     pub message_id: u16,
     pub properties: Option<UnsubscribeProperties>,
     pub unsubscriptions: Vec<String>,
@@ -154,8 +162,6 @@ pub struct UnsubscribePacket {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct UnsubackPacket {
-    pub fixed: FixedHeader,
-    pub length: u32,
     pub message_id: u16,
     /// used only in MQTT 5, will always empty if
     /// not MQTT 5
@@ -164,11 +170,43 @@ pub struct UnsubackPacket {
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct PingreqPacket {
-    pub fixed: FixedHeader,
+pub struct PingreqPacket;
+
+impl Packet for PingreqPacket {
+    fn decode<R: io::Read>(
+        reader: &mut ByteReader<R>,
+        fixed: FixedHeader,
+        length: u32,
+        protocol_version: u8,
+    ) -> Res<Self> {
+        Ok(PingreqPacket {})
+    }
+
+    fn encode(&self, protocol_version: u8) -> Res<Vec<u8>> {
+        Ok(vec![
+            FixedHeader::encode(&FixedHeader::for_type(PacketType::Pingreq)),
+            0,
+        ])
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct PingrespPacket {
-    pub fixed: FixedHeader,
+pub struct PingrespPacket;
+
+impl Packet for PingrespPacket {
+    fn decode<R: io::Read>(
+        reader: &mut ByteReader<R>,
+        fixed: FixedHeader,
+        length: u32,
+        protocol_version: u8,
+    ) -> Res<Self> {
+        Ok(PingrespPacket {})
+    }
+
+    fn encode(&self, protocol_version: u8) -> Res<Vec<u8>> {
+        Ok(vec![
+            FixedHeader::encode(&FixedHeader::for_type(PacketType::Pingresp)),
+            0,
+        ])
+    }
 }

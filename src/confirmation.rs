@@ -1,13 +1,10 @@
-use crate::packet::*;
+use crate::byte_reader::ByteReader;
+use crate::mqtt_writer::MqttWriter;
 use crate::structure::*;
 use std::io;
 
-impl PacketEncoder {
-    pub fn encode_confirmation(
-        mut self,
-        packet: ConfirmationPacket,
-        protocol_version: u8,
-    ) -> Res<Vec<u8>> {
+impl Packet for ConfirmationPacket {
+    fn encode(&self, protocol_version: u8) -> Res<Vec<u8>> {
         //   const dup = (settings.dup && type === 'pubrel') ? protocol.DUP_MASK : 0
         let ConfirmationPacket {
             fixed,
@@ -16,7 +13,7 @@ impl PacketEncoder {
             puback_reason_code,
             message_id,
             ..
-        } = packet;
+        } = &self;
         let mut length = if protocol_version == 5 { 3 } else { 2 };
         let qos = if fixed.cmd == PacketType::Pubrel {
             1
@@ -25,12 +22,13 @@ impl PacketEncoder {
         };
 
         // properies mqtt 5
-        let mut properties_data = PropertyEncoder::encode(properties, protocol_version)?;
+        let mut properties_data = Properties::encode_option(properties.as_ref(), protocol_version)?;
         if properties_data[..] == [0] {
             properties_data = vec![];
         }
         length += properties_data.len();
 
+        let mut writer = MqttWriter::new(length);
         // Header
         let mut header = FixedHeader::encode(&fixed);
         if fixed.dup {
@@ -39,13 +37,13 @@ impl PacketEncoder {
         if qos > 0 {
             header |= qos << 1;
         }
-        self.buf.push(header);
+        writer.write_u8(header);
 
         // Length
-        self.write_variable_num(length as u32)?;
+        writer.write_variable_num(length as u32)?;
 
         // Message ID
-        self.write_u16(message_id);
+        writer.write_u16(*message_id);
 
         // reason code in header
         if protocol_version == 5 {
@@ -65,24 +63,23 @@ impl PacketEncoder {
                     ))
                 }
             };
-            self.buf.push(code);
+            writer.write_u8(code);
         }
 
         // properies mqtt 5
-        self.write_vec(properties_data);
-        Ok(self.buf)
+        writer.write_variable_num(properties_data.len() as u32)?;
+        writer.write_vec(properties_data);
+        Ok(writer.into_vec())
     }
-}
 
-impl<R: io::Read> PacketDecoder<R> {
     /// Decode different confirmation types. Works for PUBACK, PUBREC, PUBREL and PUBCOMP
-    pub fn decode_confirmation_with_length(
-        &mut self,
+    fn decode<R: io::Read>(
+        reader: &mut ByteReader<R>,
         fixed: FixedHeader,
         length: u32,
         protocol_version: u8,
     ) -> Res<ConfirmationPacket> {
-        let message_id = self.reader.read_u16()?;
+        let message_id = reader.read_u16()?;
         let mut packet = ConfirmationPacket {
             fixed,
             pubcomp_reason_code: None,
@@ -94,7 +91,7 @@ impl<R: io::Read> PacketDecoder<R> {
         if protocol_version == 5 {
             let reason_code = if length > 2 {
                 // response code
-                self.reader.read_u8()?
+                reader.read_u8()?
             } else {
                 0
             };
@@ -117,7 +114,7 @@ impl<R: io::Read> PacketDecoder<R> {
 
             if length > 3 {
                 // properies mqtt 5
-                packet.properties = match self.reader.read_properties()? {
+                packet.properties = match reader.read_properties()? {
                     None => None,
                     Some(props) => Some(ConfirmationProperties::from_properties(props)?),
                 };

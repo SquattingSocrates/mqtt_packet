@@ -9,21 +9,18 @@ fn dec_from_buf(v: Vec<u8>) -> PacketDecoder<Cursor<Vec<u8>>> {
 }
 
 fn test_decode(name: &str, packet: ConnackPacket, buf: Vec<u8>, protocol_version: u8) {
-  let mut decoder = dec_from_buf(buf);
+  let mut decoder = dec_from_buf(buf.clone());
   println!("Failed: {}", name);
   assert_eq!(
-    MqttPacket::Connack(packet),
+    MqttPacket::Connack(packet.clone()),
     decoder.decode_packet(protocol_version).unwrap()
   );
+  // assert_eq!(Ok(buf), packet.encode(protocol_version))
 }
 
 fn test_encode(name: &str, packet: ConnackPacket, buf: Vec<u8>, protocol_version: u8) {
-  let encoder = PacketEncoder::new();
   println!("Failed: {}", name);
-  assert_eq!(
-    buf,
-    encoder.encode_connack(packet, protocol_version).unwrap()
-  );
+  assert_eq!(buf, packet.encode(protocol_version).unwrap());
 }
 
 fn test_parse_error(name: &str, msg: String, buf: Vec<u8>) {
@@ -37,13 +34,13 @@ fn test_connack_v4() {
   test_decode(
     "Version 4 CONNACK",
     ConnackPacket {
-      fixed: FixedHeader {
-        cmd: PacketType::Connack,
-        qos: 0,
-        dup: false,
-        retain: false,
-      },
-      length: 2,
+      // fixed: FixedHeader {
+      //   cmd: PacketType::Connack,
+      //   qos: 0,
+      //   dup: false,
+      //   retain: false,
+      // },
+      // length: 2,
       properties: None,
       reason_code: None,
       return_code: Some(1),
@@ -59,13 +56,13 @@ fn test_connack_v4() {
   test_encode(
     "Version 4 CONNACK",
     ConnackPacket {
-      fixed: FixedHeader {
-        cmd: PacketType::Connack,
-        qos: 0,
-        dup: false,
-        retain: false,
-      },
-      length: 2,
+      // fixed: FixedHeader {
+      //   cmd: PacketType::Connack,
+      //   qos: 0,
+      //   dup: false,
+      //   retain: false,
+      // },
+      // length: 2,
       properties: None,
       reason_code: None,
       return_code: Some(1),
@@ -85,13 +82,13 @@ fn test_connack_v5() {
   test_decode(
     "Version 5 CONNACK",
     ConnackPacket {
-      fixed: FixedHeader {
-        cmd: PacketType::Connack,
-        qos: 0,
-        dup: false,
-        retain: false,
-      },
-      length: 3,
+      // fixed: FixedHeader {
+      //   cmd: PacketType::Connack,
+      //   qos: 0,
+      //   dup: false,
+      //   retain: false,
+      // },
+      // length: 3,
       properties: None,
       reason_code: Some(140),
       return_code: None,
@@ -107,13 +104,13 @@ fn test_connack_v5() {
   test_encode(
     "Version 5 CONNACK",
     ConnackPacket {
-      fixed: FixedHeader {
-        cmd: PacketType::Connack,
-        qos: 0,
-        dup: false,
-        retain: false,
-      },
-      length: 3,
+      // fixed: FixedHeader {
+      //   cmd: PacketType::Connack,
+      //   qos: 0,
+      //   dup: false,
+      //   retain: false,
+      // },
+      // length: 3,
       properties: None,
       reason_code: Some(140),
       return_code: None,
@@ -132,13 +129,13 @@ fn test_connack_v4_v5_mode() {
   test_decode(
     "Version 4 CONNACK in Version 5 mode",
     ConnackPacket {
-      fixed: FixedHeader {
-        cmd: PacketType::Connack,
-        qos: 0,
-        dup: false,
-        retain: false,
-      },
-      length: 2,
+      // fixed: FixedHeader {
+      //   cmd: PacketType::Connack,
+      //   qos: 0,
+      //   dup: false,
+      //   retain: false,
+      // },
+      // length: 2,
       properties: None,
       reason_code: Some(1),
       return_code: None,
@@ -158,13 +155,13 @@ fn test_connack_7() {
   test_decode(
     "connack with return code 0",
     ConnackPacket {
-      fixed: FixedHeader {
-        cmd: PacketType::Connack,
-        qos: 0,
-        dup: false,
-        retain: false,
-      },
-      length: 2,
+      // fixed: FixedHeader {
+      //   cmd: PacketType::Connack,
+      //   qos: 0,
+      //   dup: false,
+      //   retain: false,
+      // },
+      // length: 2,
       session_present: false,
       reason_code: None,
       return_code: Some(0),
@@ -180,13 +177,13 @@ fn test_connack_8() {
   test_decode(
     "connack MQTT 5 with properties",
     ConnackPacket {
-      fixed: FixedHeader {
-        cmd: PacketType::Connack,
-        qos: 0,
-        dup: false,
-        retain: false,
-      },
-      length: 87,
+      // fixed: FixedHeader {
+      //   cmd: PacketType::Connack,
+      //   qos: 0,
+      //   dup: false,
+      //   retain: false,
+      // },
+      // length: 87,
       session_present: false,
       reason_code: Some(0),
       return_code: None,
@@ -242,13 +239,13 @@ fn test_connack_9() {
   test_decode(
     "connack MQTT 5 with properties and doubled user properties",
     ConnackPacket {
-      fixed: FixedHeader {
-        cmd: PacketType::Connack,
-        qos: 0,
-        dup: false,
-        retain: false,
-      },
-      length: 100,
+      // fixed: FixedHeader {
+      //   cmd: PacketType::Connack,
+      //   qos: 0,
+      //   dup: false,
+      //   retain: false,
+      // },
+      // length: 100,
       session_present: false,
       reason_code: Some(0),
       return_code: None,
@@ -308,13 +305,13 @@ fn test_connack_10() {
   test_decode(
     "connack with return code 0 session present bit set",
     ConnackPacket {
-      fixed: FixedHeader {
-        cmd: PacketType::Connack,
-        qos: 0,
-        dup: false,
-        retain: false,
-      },
-      length: 2,
+      // fixed: FixedHeader {
+      //   cmd: PacketType::Connack,
+      //   qos: 0,
+      //   dup: false,
+      //   retain: false,
+      // },
+      // length: 2,
       session_present: true,
       reason_code: None,
       return_code: Some(0),
@@ -330,13 +327,13 @@ fn test_connack_11() {
   test_decode(
     "connack with return code 5",
     ConnackPacket {
-      fixed: FixedHeader {
-        cmd: PacketType::Connack,
-        qos: 0,
-        dup: false,
-        retain: false,
-      },
-      length: 2,
+      // fixed: FixedHeader {
+      //   cmd: PacketType::Connack,
+      //   qos: 0,
+      //   dup: false,
+      //   retain: false,
+      // },
+      // length: 2,
       session_present: false,
       reason_code: None,
       return_code: Some(5),

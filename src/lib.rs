@@ -48,6 +48,7 @@ pub mod confirmation;
 pub mod connack;
 pub mod connect;
 pub mod disconnect;
+pub mod mqtt_writer;
 pub mod packet;
 pub mod publish;
 pub mod structure;
