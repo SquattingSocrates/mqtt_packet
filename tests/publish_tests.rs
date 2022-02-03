@@ -17,8 +17,7 @@ mod tests {
 
     fn test_encode(name: &str, packet: MqttPacket, buf: Vec<u8>, protocol_version: u8) {
         println!("Failed encode {}", name);
-        let encoder = PacketEncoder::new();
-        assert_eq!(buf, encoder.encode(packet, protocol_version).unwrap());
+        assert_eq!(buf, packet.encode(protocol_version).unwrap());
     }
 
     fn test_decode_error(msg: &str, buf: Vec<u8>, protocol_version: u8) {
@@ -32,23 +31,15 @@ mod tests {
 
     fn test_error_encode(name: &str, packet: MqttPacket, msg: &str, protocol_version: u8) {
         println!("Failed encode error {}", name);
-        let encoder = PacketEncoder::new();
-        assert_eq!(
-            Err(msg.to_string()),
-            encoder.encode(packet, protocol_version)
-        );
+        assert_eq!(Err(msg.to_string()), packet.encode(protocol_version));
     }
 
     #[test]
     fn test_publish_0() {
         let packet = MqttPacket::Publish(PublishPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Publish,
-                qos: 0,
-                dup: false,
-                retain: false,
-            },
-            length: 10,
+            qos: 0,
+            dup: false,
+            retain: false,
             properties: None,
             topic: "test".to_string(),
             payload: vec![116, 101, 115, 116],
@@ -67,14 +58,9 @@ mod tests {
     #[test]
     fn test_publish_1() {
         let packet = MqttPacket::Publish(PublishPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Publish,
-                qos: 2,
-                dup: true,
-                retain: true,
-            },
-            length: 86,
-
+            qos: 2,
+            dup: true,
+            retain: true,
             properties: Some(PublishProperties {
                 payload_format_indicator: true,
                 message_expiry_interval: Some(4321),
@@ -119,14 +105,9 @@ mod tests {
     #[test]
     fn test_publish_2() {
         let packet = MqttPacket::Publish(PublishPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Publish,
-                qos: 2,
-                dup: true,
-                retain: true,
-            },
-            length: 64,
-
+            qos: 2,
+            dup: true,
+            retain: true,
             properties: Some(PublishProperties {
                 payload_format_indicator: true,
                 message_expiry_interval: Some(4321),
@@ -178,14 +159,9 @@ mod tests {
     #[test]
     fn test_publish_3() {
         let packet = MqttPacket::Publish(PublishPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Publish,
-                qos: 2,
-                dup: true,
-                retain: true,
-            },
-            length: 27,
-
+            qos: 2,
+            dup: true,
+            retain: true,
             properties: Some(PublishProperties {
                 payload_format_indicator: false,
                 subscription_identifiers: vec![128, 16384, 2097152],
@@ -229,14 +205,9 @@ mod tests {
     #[test]
     fn test_publish_4() {
         let packet = MqttPacket::Publish(PublishPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Publish,
-                qos: 2,
-                dup: true,
-                retain: true,
-            },
-            length: 22,
-
+            qos: 2,
+            dup: true,
+            retain: true,
             properties: Some(PublishProperties {
                 payload_format_indicator: false,
                 subscription_identifiers: vec![1, 268435455],
@@ -279,14 +250,9 @@ mod tests {
     #[test]
     fn test_publish_5() {
         let packet = MqttPacket::Publish(PublishPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Publish,
-                qos: 2,
-                dup: true,
-                retain: true,
-            },
-            length: 12,
-
+            qos: 2,
+            dup: true,
+            retain: true,
             properties: None,
             topic: "test".to_string(),
             payload: vec![116, 101, 115, 116],
@@ -306,14 +272,9 @@ mod tests {
     #[test]
     fn test_publish_6() {
         let packet = MqttPacket::Publish(PublishPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Publish,
-                qos: 0,
-                dup: false,
-                retain: false,
-            },
-            length: 6,
-
+            qos: 0,
+            dup: false,
+            retain: false,
             properties: None,
             topic: "test".to_string(),
             payload: vec![],
@@ -347,13 +308,9 @@ mod tests {
         test_error_encode(
             "MQTT 5.0 var byte integer >24 bits throws error",
             MqttPacket::Publish(PublishPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Publish,
-                    qos: 2,
-                    dup: true,
-                    retain: true,
-                },
-                length: 27,
+                qos: 2,
+                dup: true,
+                retain: true,
                 properties: Some(PublishProperties {
                     payload_format_indicator: false,
                     subscription_identifiers: vec![268435456],

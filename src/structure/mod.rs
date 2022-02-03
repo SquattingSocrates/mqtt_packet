@@ -21,10 +21,8 @@ pub trait Packet: Sized {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct AuthPacket {
-    pub fixed: FixedHeader,
     pub reason_code: AuthCode,
     pub properties: Option<AuthProperties>,
-    pub length: u32,
 }
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
@@ -38,8 +36,6 @@ pub struct LastWill {
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectPacket {
-    pub fixed: FixedHeader,
-    pub length: u32,
     pub client_id: String,
     pub protocol_version: u8,
     pub protocol_id: Protocol,
@@ -54,8 +50,6 @@ pub struct ConnectPacket {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ConnackPacket {
-    // pub fixed: FixedHeader,
-    // pub length: u32,
     pub return_code: Option<u8>,
     pub reason_code: Option<u8>,
     pub session_present: bool,
@@ -65,8 +59,6 @@ pub struct ConnackPacket {
 impl Default for ConnackPacket {
     fn default() -> ConnackPacket {
         ConnackPacket {
-            // fixed: FixedHeader::for_type(PacketType::Connack),
-            // length: 0,
             return_code: None,
             reason_code: None,
             session_present: false,

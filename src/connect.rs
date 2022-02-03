@@ -15,7 +15,6 @@ impl Packet for ConnectPacket {
             protocol_id,
             protocol_version,
             password,
-            fixed,
             client_id,
             will,
             clean_session,
@@ -58,14 +57,16 @@ impl Packet for ConnectPacket {
         length += 2 + 1;
 
         // mqtt5 properties
-        let properties_data = Properties::encode_option(properties.as_ref(), protocol_version)?;
-        length += properties_data.len();
+        let (props_len, properties_data) =
+            Properties::encode_option(properties.as_ref(), protocol_version)?;
+        length += properties_data.len() + props_len.len();
 
         // If will exists...
         let mut will_retain = false;
         let mut will_qos = None;
         let mut has_will = false;
         let mut will_properties = vec![];
+        let mut will_props_len = vec![];
         let mut will_topic: &str = &"";
         let mut will_payload: &str = &"";
         if let Some(will) = will {
@@ -96,11 +97,10 @@ impl Packet for ConnectPacket {
             }
             // will properties
             if protocol_version == 5 {
-                will_properties = Properties::encode_option(properties.as_ref(), protocol_version)?;
-                length += will_properties.len();
-                // } else {
-                //     vec![0]
-                // }
+                let (l, w) = Properties::encode_option(properties.as_ref(), protocol_version)?;
+                will_properties = w;
+                will_props_len = l;
+                length += will_properties.len() + will_props_len.len();
             }
         }
 
@@ -123,7 +123,7 @@ impl Packet for ConnectPacket {
 
         let mut writer = MqttWriter::new(length);
         // write header
-        writer.write_u8(fixed.encode());
+        writer.write_u8(FixedHeader::for_type(PacketType::Connect).encode());
         // length
         writer.write_variable_num(length as u32)?;
         // protocol id and protocol version
@@ -146,12 +146,12 @@ impl Packet for ConnectPacket {
         // write keep alive
         writer.write_u16(*keep_alive);
 
-        writer.write_vec(properties_data);
+        writer.write_sized(&properties_data, &props_len)?;
         // client id
         writer.write_utf8_str(client_id);
         // will properties
         if protocol_version == 5 {
-            writer.write_vec(will_properties);
+            writer.write_sized(&will_properties, &will_props_len)?;
         }
         // will topic and payload
         if has_will {
@@ -239,8 +239,6 @@ impl Packet for ConnectPacket {
         }
         // need for right parse auth packet and self set up
         Ok(ConnectPacket {
-            fixed,
-            length,
             client_id,
             protocol_version,
             protocol_id,

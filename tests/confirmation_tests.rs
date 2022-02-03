@@ -12,7 +12,7 @@ mod tests {
     fn test_decode(name: &str, packet: ConfirmationPacket, buf: Vec<u8>, protocol_version: u8) {
         let mut decoder = dec_from_buf(buf.clone());
         println!("Failed: {}", name);
-        match packet.fixed.cmd {
+        match packet.cmd {
             PacketType::Puback => assert_eq!(
                 MqttPacket::Puback(packet.clone()),
                 decoder.decode_packet(protocol_version).unwrap()
@@ -35,7 +35,6 @@ mod tests {
 
     fn test_encode(name: &str, packet: ConfirmationPacket, buf: Vec<u8>) {
         println!("Failed encode {}", name);
-        let encoder = PacketEncoder::new();
         assert_eq!(buf, packet.encode(5).unwrap());
     }
 
@@ -50,13 +49,7 @@ mod tests {
         test_decode(
             "Version 5 PUBACK test 1",
             ConfirmationPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Puback,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 2,
+                cmd: PacketType::Puback,
                 pubcomp_reason_code: None,
                 puback_reason_code: Some(PubackPubrecCode::Success),
                 properties: None,
@@ -74,13 +67,7 @@ mod tests {
     #[test]
     fn test_puback_1() {
         let packet = ConfirmationPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Puback,
-                qos: 0,
-                dup: false,
-                retain: false,
-            },
-            length: 3,
+            cmd: PacketType::Puback,
             pubcomp_reason_code: None,
             puback_reason_code: Some(PubackPubrecCode::Success),
             properties: None,
@@ -90,9 +77,10 @@ mod tests {
             "Version 5 PUBACK test 2",
             packet.clone(),
             vec![
-                64, 3, // Fixed Header (PUBACK, Remaining Length)
-                0, 42,
-                0, // Variable Header (2 Bytes: Packet Identifier 42, Reason code: 0 Success, Implied no properties)
+                64, 2, // Fixed Header (PUBACK, Remaining Length)
+                0,
+                42,
+                // No Variable Header (2 Bytes: Packet Identifier 42, Reason code: 0 Success, Implied no properties)
             ],
             5,
         );
@@ -101,9 +89,10 @@ mod tests {
             "Version 5 PUBACK test 2",
             packet.clone(),
             vec![
-                64, 3, // Fixed Header (PUBACK, Remaining Length)
-                0, 42,
-                0, // Variable Header (2 Bytes: Packet Identifier 42, Reason code: 0 Success, Implied no properties)
+                64, 2, // Fixed Header (PUBACK, Remaining Length)
+                0,
+                42,
+                // No Variable Header (2 Bytes: Packet Identifier 42, Reason code: 0 Success, Implied no properties)
             ],
         );
     }
@@ -112,13 +101,7 @@ mod tests {
         test_decode(
             "Version 5 PUBACK test 3",
             ConfirmationPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Puback,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 4,
+                cmd: PacketType::Puback,
                 pubcomp_reason_code: None,
                 puback_reason_code: Some(PubackPubrecCode::Success),
                 properties: None,
@@ -139,13 +122,7 @@ mod tests {
         test_decode(
             "puback",
             ConfirmationPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Puback,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 2,
+                cmd: PacketType::Puback,
                 pubcomp_reason_code: None,
                 puback_reason_code: None,
                 properties: None,
@@ -176,13 +153,7 @@ mod tests {
         test_decode(
             "puback with reason and no MQTT 5 properties",
             ConfirmationPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Puback,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 3,
+                cmd: PacketType::Puback,
                 pubcomp_reason_code: None,
                 puback_reason_code: Some(PubackPubrecCode::NoMatchingSubscribers),
                 properties: None,
@@ -202,13 +173,7 @@ mod tests {
         test_decode(
             "puback MQTT 5 properties",
             ConfirmationPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Puback,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 24,
+                cmd: PacketType::Puback,
                 pubcomp_reason_code: None,
                 puback_reason_code: Some(PubackPubrecCode::NoMatchingSubscribers),
                 message_id: 2,
@@ -249,13 +214,7 @@ mod tests {
         test_decode(
             "pubrec",
             ConfirmationPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Pubrec,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 2,
+                cmd: PacketType::Pubrec,
                 pubcomp_reason_code: None,
                 puback_reason_code: None,
                 properties: None,
@@ -274,13 +233,7 @@ mod tests {
         test_decode(
             "pubrec",
             ConfirmationPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Pubrec,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 2,
+                cmd: PacketType::Pubrec,
                 pubcomp_reason_code: None,
                 puback_reason_code: Some(PubackPubrecCode::Success),
                 properties: None,
@@ -309,24 +262,17 @@ mod tests {
     fn test_pubrec_7() {
         test_decode(
             "pubrec MQTT 5 properties",
-            ConfirmationPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Pubrec,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 24,
-                pubcomp_reason_code: None,
-                puback_reason_code: Some(PubackPubrecCode::NoMatchingSubscribers),
-                message_id: 2,
-                properties: Some(ConfirmationProperties {
+            ConfirmationPacket::pubrec_v5(
+                2, // message_id
+                PubackPubrecCode::NoMatchingSubscribers,
+                // properties:
+                Some(ConfirmationProperties {
                     reason_string: Some("test".to_string()),
                     user_properties: [("test".to_string(), vec!["test".to_string()])]
                         .into_iter()
                         .collect::<UserProperties>(),
                 }),
-            },
+            ),
             vec![
                 80, 24, // Header
                 0, 2,  // Message ID
@@ -344,13 +290,7 @@ mod tests {
         test_decode(
             "pubrel",
             ConfirmationPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Pubrel,
-                    qos: 1,
-                    dup: false,
-                    retain: false,
-                },
-                length: 2,
+                cmd: PacketType::Pubrel,
                 pubcomp_reason_code: None,
                 puback_reason_code: None,
                 properties: None,
@@ -394,13 +334,7 @@ mod tests {
         test_decode(
             "pubrel MQTT5 properties",
             ConfirmationPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Pubrel,
-                    qos: 1,
-                    dup: false,
-                    retain: false,
-                },
-                length: 24,
+                cmd: PacketType::Pubrel,
                 pubcomp_reason_code: Some(PubcompPubrelCode::PacketIdentifierNotFound),
                 puback_reason_code: None,
                 message_id: 2,
@@ -441,13 +375,7 @@ mod tests {
         test_decode(
             "pubcomp",
             ConfirmationPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Pubcomp,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 2,
+                cmd: PacketType::Pubcomp,
                 pubcomp_reason_code: Some(PubcompPubrelCode::Success),
                 puback_reason_code: None,
                 message_id: 2,
@@ -477,13 +405,7 @@ mod tests {
         test_decode(
             "pubcomp MQTT 5 properties",
             ConfirmationPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Pubcomp,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 24,
+                cmd: PacketType::Pubcomp,
                 pubcomp_reason_code: Some(PubcompPubrelCode::PacketIdentifierNotFound),
                 puback_reason_code: None,
                 message_id: 2,

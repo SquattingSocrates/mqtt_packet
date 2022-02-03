@@ -3,37 +3,237 @@ use crate::mqtt_writer::MqttWriter;
 use crate::structure::*;
 use std::io;
 
+// convenience constructors for ConfirmationPacket
+impl ConfirmationPacket {
+    fn with_message_id(cmd: PacketType, message_id: u16) -> ConfirmationPacket {
+        ConfirmationPacket {
+            cmd,
+            message_id,
+            properties: None,
+            puback_reason_code: None,
+            pubcomp_reason_code: None,
+        }
+    }
+
+    fn puback_v5_builder(
+        cmd: PacketType,
+        message_id: u16,
+        reason_code: PubackPubrecCode,
+        properties: Option<ConfirmationProperties>,
+    ) -> ConfirmationPacket {
+        ConfirmationPacket {
+            cmd,
+            message_id,
+            properties,
+            puback_reason_code: Some(reason_code),
+            pubcomp_reason_code: None,
+        }
+    }
+
+    fn pubcomp_v5_builder(
+        cmd: PacketType,
+        message_id: u16,
+        reason_code: PubcompPubrelCode,
+        properties: Option<ConfirmationProperties>,
+    ) -> ConfirmationPacket {
+        ConfirmationPacket {
+            cmd,
+            message_id,
+            properties,
+            puback_reason_code: None,
+            pubcomp_reason_code: Some(reason_code),
+        }
+    }
+
+    /// create a correct v3 PUBACK packet. A v3 PUBACK requires
+    /// only a 2 byte message_id
+    /// # Example
+    ///
+    /// ```
+    /// use mqtt_packet_3_5::{ConfirmationPacket, PacketType};
+    /// let packet = ConfirmationPacket::puback_v3(123);
+    /// assert_eq!(packet, ConfirmationPacket {
+    ///     cmd: PacketType::Puback,
+    ///     message_id: 123,
+    ///     properties: None,          // v3 has no properties
+    ///     puback_reason_code: None,  // v3 has no reason code
+    ///     pubcomp_reason_code: None, // v3 has no reason code
+    /// });
+    ///
+    ///
+    /// ```
+    pub fn puback_v3(message_id: u16) -> ConfirmationPacket {
+        ConfirmationPacket::with_message_id(PacketType::Puback, message_id)
+    }
+
+    /// create a correct v5 PUBACK packet. A v5 PUBACK requires
+    /// a 2 byte message_id, a reason code and possibly empty properties
+    pub fn puback_v5(
+        message_id: u16,
+        reason_code: PubackPubrecCode,
+        properties: Option<ConfirmationProperties>,
+    ) -> ConfirmationPacket {
+        Self::puback_v5_builder(PacketType::Puback, message_id, reason_code, properties)
+    }
+
+    /// create a correct v3 PUBREC packet. A v3 PUBREC requires
+    /// only a 2 byte message_id
+    /// # Example
+    ///
+    /// ```
+    /// use mqtt_packet_3_5::{ConfirmationPacket, PacketType};
+    /// let packet = ConfirmationPacket::pubrec_v3(123);
+    /// assert_eq!(packet, ConfirmationPacket {
+    ///     cmd: PacketType::Pubrec,
+    ///     message_id: 123,
+    ///     properties: None,          // v3 has no properties
+    ///     puback_reason_code: None,  // v3 has no reason code
+    ///     pubcomp_reason_code: None, // v3 has no reason code
+    /// });
+    ///
+    ///
+    /// ```
+    pub fn pubrec_v3(message_id: u16) -> ConfirmationPacket {
+        ConfirmationPacket::with_message_id(PacketType::Pubrec, message_id)
+    }
+
+    /// create a correct v5 PUBREC packet. A v5 PUBREC requires
+    /// a 2 byte message_id, a reason code and possibly empty properties
+    pub fn pubrec_v5(
+        message_id: u16,
+        reason_code: PubackPubrecCode,
+        properties: Option<ConfirmationProperties>,
+    ) -> ConfirmationPacket {
+        Self::puback_v5_builder(PacketType::Pubrec, message_id, reason_code, properties)
+    }
+
+    /// create a correct v3 PUBREL packet. A v3 PUBREL requires
+    /// only a 2 byte message_id. Since a PUBREL needs to have QoS 1
+    /// set there's no need to provide a constructor for this and is taken
+    /// care of while encoding
+    /// # Example
+    ///
+    /// ```
+    /// use mqtt_packet_3_5::{ConfirmationPacket, PacketType};
+    /// let packet = ConfirmationPacket::pubrel_v3(123);
+    /// assert_eq!(packet, ConfirmationPacket {
+    ///     cmd: PacketType::Pubrel,
+    ///     message_id: 123,
+    ///     properties: None,          // v3 has no properties
+    ///     puback_reason_code: None,  // v3 has no reason code
+    ///     pubcomp_reason_code: None, // v3 has no reason code
+    /// });
+    ///
+    ///
+    /// ```
+    pub fn pubrel_v3(message_id: u16) -> ConfirmationPacket {
+        ConfirmationPacket::with_message_id(PacketType::Pubrel, message_id)
+    }
+
+    /// create a correct v5 PUBREL packet. A v5 PUBREL requires
+    /// a 2 byte message_id, a reason code and possibly empty properties
+    pub fn pubrel_v5(
+        message_id: u16,
+        reason_code: PubackPubrecCode,
+        properties: Option<ConfirmationProperties>,
+    ) -> ConfirmationPacket {
+        Self::puback_v5_builder(PacketType::Pubrel, message_id, reason_code, properties)
+    }
+
+    /// create a correct v3 PUBCOMP packet. A v3 PUBCOMP requires
+    /// only a 2 byte message_id
+    /// # Example
+    ///
+    /// ```
+    /// use mqtt_packet_3_5::{ConfirmationPacket, PacketType};
+    /// let packet = ConfirmationPacket::pubcomp_v3(123);
+    /// assert_eq!(packet, ConfirmationPacket {
+    ///     cmd: PacketType::Pubcomp,
+    ///     message_id: 123,
+    ///     properties: None,          // v3 has no properties
+    ///     puback_reason_code: None,  // v3 has no reason code
+    ///     pubcomp_reason_code: None, // v3 has no reason code
+    /// });
+    ///
+    ///
+    /// ```
+    pub fn pubcomp_v3(message_id: u16) -> ConfirmationPacket {
+        ConfirmationPacket::with_message_id(PacketType::Pubcomp, message_id)
+    }
+
+    /// create a correct v5 PUBREL packet. A v5 PUBREL requires
+    /// a 2 byte message_id, a reason code and possibly empty properties
+    pub fn pubcomp_v5(
+        message_id: u16,
+        reason_code: PubackPubrecCode,
+        properties: Option<ConfirmationProperties>,
+    ) -> ConfirmationPacket {
+        Self::puback_v5_builder(PacketType::Pubcomp, message_id, reason_code, properties)
+    }
+}
+
 impl Packet for ConfirmationPacket {
     fn encode(&self, protocol_version: u8) -> Res<Vec<u8>> {
         //   const dup = (settings.dup && type === 'pubrel') ? protocol.DUP_MASK : 0
         let ConfirmationPacket {
-            fixed,
+            cmd,
             properties,
             pubcomp_reason_code,
             puback_reason_code,
             message_id,
             ..
         } = &self;
-        let mut length = if protocol_version == 5 { 3 } else { 2 };
-        let qos = if fixed.cmd == PacketType::Pubrel {
-            1
+        // let mut length = if protocol_version == 5 { 3 } else { 2 };
+        let mut length = 2;
+        // Bits 3,2,1 and 0 of the Fixed Header in the PUBREL packet are reserved
+        // and MUST be set to 0,0,1 and 0 respectively. The Server MUST treat
+        // any other value as malformed and close the
+        // Network Connection [MQTT-3.6.1-1].
+        let qos = if *cmd == PacketType::Pubrel { 1 } else { 0 };
+
+        // reason code in header
+        let code = if protocol_version == 5 {
+            match (puback_reason_code, pubcomp_reason_code, cmd) {
+                (Some(_), Some(_), t) => {
+                    return Err(format!(
+                    "Only puback_reason_code OR pubcomp_reason_code can be set simultaneously {:?}",
+                    t
+                ))
+                }
+                (Some(code), None, PacketType::Pubrec | PacketType::Puback) => Some(code.to_byte()),
+                (None, Some(code), PacketType::Pubcomp | PacketType::Pubrel) => {
+                    Some(code.to_byte())
+                }
+                (x, y, t) => {
+                    return Err(format!(
+                        "Invalid combination of confirmation type {:?} and codes {:?} | {:?}",
+                        t, x, y
+                    ))
+                }
+            }
         } else {
-            0
+            None
         };
 
         // properies mqtt 5
-        let mut properties_data = Properties::encode_option(properties.as_ref(), protocol_version)?;
-        if properties_data[..] == [0] {
-            properties_data = vec![];
-        }
-        length += properties_data.len();
+        let (props_len, properties_data) =
+            Properties::encode_option(properties.as_ref(), protocol_version)?;
+        // The Client or Server sending the PUBREL packet MUST use one of
+        // the PUBREL Reason Code values [MQTT-3.6.2-1]. The Reason Code
+        // and Property Length can be omitted if the Reason Code is 0x00 (Success)
+        // and there are no Properties. In this case the PUBREL has a
+        // Remaining Length of 2.
+        match (code, properties_data.is_empty()) {
+            (Some(0), true) => length = 2,
+            _ => length += properties_data.len() + props_len.len(),
+        };
 
         let mut writer = MqttWriter::new(length);
         // Header
-        let mut header = FixedHeader::encode(&fixed);
-        if fixed.dup {
-            header |= 0x08;
-        }
+        let mut header = FixedHeader::encode(&FixedHeader::for_type(*cmd));
+        // if fixed.dup {
+        //     header |= 0x08;
+        // }
         if qos > 0 {
             header |= qos << 1;
         }
@@ -44,31 +244,17 @@ impl Packet for ConfirmationPacket {
 
         // Message ID
         writer.write_u16(*message_id);
-
-        // reason code in header
-        if protocol_version == 5 {
-            let code = match (puback_reason_code, pubcomp_reason_code, fixed.cmd) {
-                (Some(_), Some(_), t) => {
-                    return Err(format!(
-                    "Only puback_reason_code OR pubcomp_reason_code can be set simultaneously {:?}",
-                    t
-                ))
-                }
-                (Some(code), None, PacketType::Pubrec | PacketType::Puback) => code.to_byte(),
-                (None, Some(code), PacketType::Pubcomp | PacketType::Pubrel) => code.to_byte(),
-                (x, y, t) => {
-                    return Err(format!(
-                        "Invalid combination of confirmation type {:?} and codes {:?} | {:?}",
-                        t, x, y
-                    ))
-                }
-            };
-            writer.write_u8(code);
+        println!("AFTER MESSAGE_ID {:?}", writer.buf);
+        // maybe write code
+        if length > 2 && code.is_some() {
+            writer.write_u8(code.unwrap());
         }
 
         // properies mqtt 5
-        writer.write_variable_num(properties_data.len() as u32)?;
-        writer.write_vec(properties_data);
+        println!("BEFORE WRITING PROPS {:?}", writer.buf);
+        if length > 2 {
+            writer.write_sized(&properties_data, &props_len)?;
+        }
         Ok(writer.into_vec())
     }
 
@@ -81,12 +267,11 @@ impl Packet for ConfirmationPacket {
     ) -> Res<ConfirmationPacket> {
         let message_id = reader.read_u16()?;
         let mut packet = ConfirmationPacket {
-            fixed,
+            cmd: fixed.cmd,
             pubcomp_reason_code: None,
             puback_reason_code: None,
             properties: None,
             message_id,
-            length,
         };
         if protocol_version == 5 {
             let reason_code = if length > 2 {
@@ -97,7 +282,7 @@ impl Packet for ConfirmationPacket {
             };
             // set correct reason code with either read code or
             // from 0 = Success
-            match packet.fixed.cmd {
+            match packet.cmd {
                 PacketType::Puback | PacketType::Pubrec => {
                     packet.puback_reason_code = Some(PubackPubrecCode::from_byte(reason_code)?);
                 }

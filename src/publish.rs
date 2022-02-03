@@ -70,8 +70,9 @@ impl Packet for PublishPacket {
         }
 
         // mqtt5 properties
-        let properties_data = Properties::encode_option(properties.as_ref(), protocol_version)?;
-        length += properties_data.len();
+        let (props_len, properties_data) =
+            Properties::encode_option(properties.as_ref(), protocol_version)?;
+        length += properties_data.len() + props_len.len();
         let mut writer = MqttWriter::new(length);
         // Header
         writer.write_header(FixedHeader {
@@ -93,7 +94,7 @@ impl Packet for PublishPacket {
         }
 
         // Properties
-        writer.write_vec(properties_data);
+        writer.write_sized(&properties_data, &props_len)?;
 
         // Payload
         writer.write_slice(payload);

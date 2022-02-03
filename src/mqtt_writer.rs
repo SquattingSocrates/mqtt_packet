@@ -1,7 +1,7 @@
 use crate::structure::{FixedHeader, PropType, Res, VARBYTEINT_MAX};
 
 pub struct MqttWriter {
-    buf: Vec<u8>,
+    pub(crate) buf: Vec<u8>,
 }
 
 impl MqttWriter {
@@ -183,15 +183,17 @@ impl MqttWriter {
         self.buf.extend_from_slice(v);
     }
 
-    pub fn write_sized(&mut self, v: Vec<u8>, write_empty_size: bool) -> Res<()> {
-        println!("WRITING SIZED {:?} {}", v, write_empty_size);
+    pub fn write_sized(&mut self, v: &[u8], size: &[u8]) -> Res<()> {
+        println!("WRITING SIZED {:?} {:?}", v, size);
         // write only 0 to indicate empty properties
-        if v[..] == [0] && write_empty_size {
+        if v.is_empty() && size == [0] {
+            println!("WRITING ONLY 0");
             self.write_u8(0);
         } else if !v.is_empty() {
+            println!("ENCODING PROPS REGULARLY");
             // normally encode length and properties
-            self.write_variable_num(v.len() as u32)?;
-            self.write_vec(v);
+            self.write_slice(size);
+            self.write_slice(v);
         }
         Ok(())
     }

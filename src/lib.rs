@@ -35,7 +35,7 @@
 //! ##### However certain things still need to be added/improved:
 //!
 //!
-//! - [ ] A better command building API?
+//! - [x] A better command building API?
 //! - [ ] Make only necessary code public
 //! - [ ] Support for Maximum Packet Size (MQTTv5). Should not send certain properties if they "bloat" the packet
 //! - [ ] Ensure all properties have the correct Optionality set in their types
@@ -57,22 +57,15 @@ pub mod subscribe;
 pub mod unsubscribe;
 
 /// Library for encoding/decoding MQTTv3 and MQTTv5 messages
-///
+/// Many more examples are currently in the test folder
 /// # Examples
 ///
 /// ```
 /// use mqtt_packet_3_5::*;
-/// let packet = MqttPacket::Pingreq(PingreqPacket {
-///     fixed: FixedHeader {
-///         cmd: PacketType::Pingreq,
-///         qos: 0,
-///         dup: false,
-///         retain: false,
-///     },
-/// });
+/// let packet = MqttPacket::Pingreq;
 /// assert_eq!(Ok(vec![
 ///     192, 0, // Header
-/// ]), mqtt_packet_3_5::PacketEncoder::encode_packet(packet, 5));
+/// ]), packet.encode(5));
 ///
 ///
 /// ```
@@ -87,5 +80,5 @@ pub mod unsubscribe;
 ///
 ///
 /// ```
-pub use packet::{MqttPacket, PacketDecoder, PacketEncoder};
+pub use packet::{MqttPacket, PacketDecoder};
 pub use structure::*;

@@ -35,6 +35,15 @@ impl QoS {
             QoS::QoS2 => 2,
         }
     }
+
+    pub fn from_byte(byte: u8) -> Res<QoS> {
+        Ok(match byte {
+            0 => QoS::QoS0,
+            1 => QoS::QoS1,
+            2 => QoS::QoS2,
+            _ => return Err("Invalid QoS, must be <= 2".to_string()),
+        })
+    }
 }
 
 static DUP_MASK: u8 = 0x8;
@@ -168,13 +177,11 @@ impl FixedHeader {
     pub fn encode(&self) -> u8 {
         let message_type = PacketType::to_bits(self.cmd);
         match self.cmd {
-            PacketType::Unsuback | PacketType::Unsubscribe => {
-                message_type | ((self.dup as u8) << 3) | (self.qos << 1)
-            }
+            // PacketType::Unsuback => message_type | ((self.dup as u8) << 3) | (self.qos << 1),
             PacketType::Publish => {
                 message_type | ((self.dup as u8) << 3) | (self.qos << 1) | self.retain as u8
             }
-            PacketType::Subscribe => {
+            PacketType::Unsubscribe | PacketType::Subscribe => {
                 message_type | 2 // Bits 3,2,1 and 0 need to ALWAYS be set to 0, 0, 1, 0 respectively
             }
             _ => message_type,

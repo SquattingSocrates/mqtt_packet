@@ -37,9 +37,9 @@ impl Packet for DisconnectPacket {
     fn encode(&self, protocol_version: u8) -> Res<Vec<u8>> {
         let mut length = if protocol_version == 5 { 1 } else { 0 };
         // properies mqtt 5
-        let properties_data =
+        let (props_len, properties_data) =
             Properties::encode_option(self.properties.as_ref(), protocol_version)?;
-        length += properties_data.len();
+        length += properties_data.len() + props_len.len();
         let mut writer = MqttWriter::new(length);
         // Header
         writer.write_header(FixedHeader::for_type(PacketType::Disconnect));
@@ -50,7 +50,7 @@ impl Packet for DisconnectPacket {
             writer.write_u8(self.reason_code.as_ref().unwrap().to_byte());
         }
         // properies mqtt 5
-        writer.write_vec(properties_data);
+        writer.write_sized(&properties_data, &props_len)?;
         Ok(writer.into_vec())
     }
 }

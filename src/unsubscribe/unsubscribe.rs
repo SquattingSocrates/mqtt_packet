@@ -1,6 +1,5 @@
 use crate::byte_reader::ByteReader;
 use crate::mqtt_writer::MqttWriter;
-use crate::packet::*;
 use crate::structure::*;
 use std::io;
 
@@ -17,8 +16,9 @@ impl Packet for UnsubscribePacket {
       .fold(0, |acc, unsub| acc + unsub.len() + 2);
 
     // properies mqtt 5
-    let properties_data = Properties::encode_option(self.properties.as_ref(), protocol_version)?;
-    length += properties_data.len();
+    let (props_len, properties_data) =
+      Properties::encode_option(self.properties.as_ref(), protocol_version)?;
+    length += properties_data.len() + props_len.len();
     let mut writer = MqttWriter::new(length);
     // header
     writer.write_header(FixedHeader::for_type(PacketType::Unsubscribe));
@@ -30,8 +30,7 @@ impl Packet for UnsubscribePacket {
     writer.write_u16(self.message_id);
 
     // properies mqtt 5
-    writer.write_variable_num(properties_data.len() as u32)?;
-    writer.write_vec(properties_data);
+    writer.write_sized(&properties_data, &props_len)?;
 
     // Unsubs
     for unsub in self.unsubscriptions.iter() {

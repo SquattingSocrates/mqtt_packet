@@ -23,16 +23,17 @@ pub(crate) trait Properties: Sized {
         Ok(writer.into_vec())
     }
 
-    fn encode_option(props: Option<&Self>, protocol_version: u8) -> Res<Vec<u8>> {
+    fn encode_option(props: Option<&Self>, protocol_version: u8) -> Res<(Vec<u8>, Vec<u8>)> {
         // Confirm should not add empty property length with no properties (rfc 3.4.2.2.1)
         if protocol_version == 5 {
             if let Some(p) = props {
-                return p.encode();
+                let enc = p.encode()?;
+                Ok((MqttWriter::encode_variable_num(enc.len() as u32), enc))
             } else {
-                Ok(vec![0]) // empty properties
+                Ok((vec![0], vec![])) // empty properties
             }
         } else {
-            Ok(vec![]) // no properties exist in MQTT < 5
+            Ok((vec![], vec![])) // no properties exist in MQTT < 5
         }
     }
 }
@@ -503,8 +504,7 @@ impl Properties for ConnackProperties {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 /// A struct for PUBACK, PUBCOMP, PUBREL and PUBREC
 pub struct ConfirmationPacket {
-    pub fixed: FixedHeader,
-    pub length: u32,
+    pub cmd: PacketType,
     /// Reason code is always 0 by default for MQTT 5
     /// but absent for MQTT 3 and 4
     pub puback_reason_code: Option<PubackPubrecCode>,

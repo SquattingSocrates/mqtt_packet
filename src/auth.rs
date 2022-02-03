@@ -16,10 +16,9 @@ impl Packet for AuthPacket {
         let mut length = 1;
 
         // properies mqtt 5
-        let properties_data =
+        let (props_len, properties_data) =
             Properties::encode_option(self.properties.as_ref(), protocol_version)?;
-        length += properties_data.len();
-
+        length += properties_data.len() + props_len.len();
         let mut writer = MqttWriter::new(length);
         // header
         writer.write_header(FixedHeader::for_type(PacketType::Auth));
@@ -31,7 +30,7 @@ impl Packet for AuthPacket {
         writer.write_u8(self.reason_code.to_byte());
 
         // properies mqtt 5
-        writer.write_sized(properties_data, protocol_version == 5)?;
+        writer.write_sized(&properties_data, &props_len)?;
 
         Ok(writer.into_vec())
     }
@@ -47,10 +46,8 @@ impl Packet for AuthPacket {
         }
         // response code
         let mut packet = AuthPacket {
-            fixed,
             reason_code: AuthCode::Success,
             properties: None,
-            length,
         };
         packet.reason_code = AuthCode::from_byte(reader.read_u8()?)?;
         // properies mqtt 5

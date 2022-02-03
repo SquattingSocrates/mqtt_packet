@@ -17,8 +17,7 @@ mod tests {
 
     fn test_encode(name: &str, packet: MqttPacket, buf: Vec<u8>, protocol_version: u8) {
         println!("Failed encode {}", name);
-        let encoder = PacketEncoder::new();
-        assert_eq!(buf, encoder.encode(packet, protocol_version).unwrap());
+        assert_eq!(buf, packet.encode(protocol_version).unwrap());
     }
 
     fn test_decode_error(msg: &str, buf: Vec<u8>, protocol_version: u8) {
@@ -32,13 +31,7 @@ mod tests {
     #[test]
     fn test_unsubscribe_0() {
         let packet = MqttPacket::Unsubscribe(UnsubscribePacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Unsubscribe,
-                qos: 1,
-                dup: false,
-                retain: false,
-            },
-            length: 14,
+            qos: 1,
             message_id: 7,
             properties: None,
             unsubscriptions: vec!["tfst".to_string(), "test".to_string()],
@@ -72,13 +65,7 @@ mod tests {
     #[test]
     fn test_unsubscribe_1() {
         let packet = MqttPacket::Unsubscribe(UnsubscribePacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Unsubscribe,
-                qos: 1,
-                dup: false,
-                retain: false,
-            },
-            length: 28,
+            qos: 1,
             message_id: 7,
             properties: Some(UnsubscribeProperties {
                 user_properties: vec![("test".to_string(), vec!["test".to_string()])]
@@ -103,13 +90,6 @@ mod tests {
     #[test]
     fn test_unsuback_0() {
         let packet = MqttPacket::Unsuback(UnsubackPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Unsuback,
-                qos: 0,
-                dup: false,
-                retain: false,
-            },
-            length: 2,
             message_id: 8,
             properties: None,
             granted: vec![],
@@ -137,13 +117,6 @@ mod tests {
     #[test]
     fn test_unsuback_1() {
         let packet = MqttPacket::Unsuback(UnsubackPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Unsuback,
-                qos: 0,
-                dup: false,
-                retain: false,
-            },
-            length: 25,
             message_id: 8,
             properties: Some(ConfirmationProperties {
                 reason_string: Some("test".to_string()),

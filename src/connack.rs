@@ -18,16 +18,16 @@ impl Packet for ConnackPacket {
         }
         let rc = rc.unwrap();
         // mqtt5 properties
-        let properties_data =
+        let (props_len, properties_data) =
             Properties::encode_option(self.properties.as_ref(), protocol_version)?;
-        length += properties_data.len();
+        length += properties_data.len() + props_len.len();
         let mut writer = MqttWriter::new(length);
         writer.write_u8(FixedHeader::for_type(PacketType::Connack).encode());
         // length
         writer.write_variable_num(length as u32)?;
         writer.write_u8(if self.session_present { 0x01 } else { 0x0 });
         writer.write_u8(rc);
-        writer.write_sized(properties_data, protocol_version == 5)?;
+        writer.write_sized(&properties_data, &props_len)?;
         // return true
         Ok(writer.into_vec())
     }

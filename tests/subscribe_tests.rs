@@ -14,8 +14,7 @@ mod tests {
         println!("Failed: {}", name);
         assert_eq!(packet, decoder.decode_packet(protocol_version).unwrap());
         println!("Failed encode {}", name);
-        let encoder = PacketEncoder::new();
-        assert_eq!(buf, encoder.encode(packet, protocol_version).unwrap());
+        assert_eq!(buf, packet.encode(protocol_version).unwrap());
     }
 
     fn test_decode_error(msg: &str, buf: Vec<u8>, protocol_version: u8) {
@@ -47,13 +46,7 @@ mod tests {
         test_decode(
             "subscribe to one topic",
             MqttPacket::Subscribe(SubscribePacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Subscribe,
-                    qos: 1,
-                    dup: false,
-                    retain: false,
-                },
-                length: 9,
+                qos: 1,
                 message_id: 6,
                 subscriptions: vec![Subscription {
                     qos: QoS::QoS0,
@@ -78,7 +71,7 @@ mod tests {
     #[test]
     fn test_sub_error_1() {
         test_decode_error(
-            "Invalid subscribe QoS, must be <= 2",
+            "Invalid QoS, must be <= 2",
             vec![
                 130, 9, // Header (subscribeqos=0length=9)
                 0, 6, // Message ID (6)
@@ -142,13 +135,7 @@ mod tests {
         test_decode(
             "subscribe to one topic by MQTT 5",
             MqttPacket::Subscribe(SubscribePacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Subscribe,
-                    qos: 1,
-                    dup: false,
-                    retain: false,
-                },
-                length: 26,
+                qos: 1,
                 message_id: 6,
                 subscriptions: vec![Subscription {
                     topic: "test".to_string(),
@@ -183,13 +170,7 @@ mod tests {
         test_decode(
             "subscribe to three topics",
             MqttPacket::Subscribe(SubscribePacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Subscribe,
-                    qos: 1,
-                    dup: false,
-                    retain: false,
-                },
-                length: 23,
+                qos: 1,
                 message_id: 6,
                 subscriptions: vec![
                     Subscription {
@@ -238,13 +219,7 @@ mod tests {
         test_decode(
             "subscribe to 3 topics by MQTT 5",
             MqttPacket::Subscribe(SubscribePacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Subscribe,
-                    qos: 1,
-                    dup: false,
-                    retain: false,
-                },
-                length: 40,
+                qos: 1,
                 message_id: 6,
                 properties: Some(SubscribeProperties {
                     subscription_identifier: 145,
@@ -301,13 +276,7 @@ mod tests {
         test_decode(
             "suback",
             MqttPacket::Suback(SubackPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Suback,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 5,
+                // qos: 0,
                 reason_code: None,
                 properties: None,
                 message_id: 6,
@@ -328,13 +297,6 @@ mod tests {
         test_decode(
             "suback",
             MqttPacket::Suback(SubackPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Suback,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 7,
                 reason_code: None,
                 properties: None,
                 message_id: 6,
@@ -359,7 +321,7 @@ mod tests {
     #[test]
     fn test_error_5() {
         test_decode_error(
-            "Invalid suback QoS, must be <= 2",
+            "Invalid QoS, must be <= 2",
             vec![
                 144, 6, // Header
                 0, 6, // Message ID
@@ -372,7 +334,7 @@ mod tests {
     #[test]
     fn test_error_6() {
         test_decode_error(
-            "Invalid suback QoS, must be <= 2",
+            "Invalid QoS, must be <= 2",
             vec![
                 144, 6, // Header
                 0, 6, // Message ID
@@ -387,13 +349,6 @@ mod tests {
         test_decode(
             "suback MQTT 5",
             MqttPacket::Suback(SubackPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Suback,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 27,
                 reason_code: None,
                 properties: Some(ConfirmationProperties {
                     reason_string: Some("test".to_string()),

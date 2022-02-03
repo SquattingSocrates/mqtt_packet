@@ -14,9 +14,9 @@ impl Packet for UnsubackPacket {
         length += self.granted.len();
 
         // properies mqtt 5
-        let properties_data =
+        let (props_len, properties_data) =
             Properties::encode_option(self.properties.as_ref(), protocol_version)?;
-        length += properties_data.len();
+        length += properties_data.len() + props_len.len();
         let mut writer = MqttWriter::new(length);
         // header
         writer.write_header(FixedHeader::for_type(PacketType::Unsuback));
@@ -28,7 +28,7 @@ impl Packet for UnsubackPacket {
         writer.write_u16(self.message_id);
 
         // properies mqtt 5
-        writer.write_vec(properties_data);
+        writer.write_sized(&properties_data, &props_len)?;
 
         // Granted
         for g in self.granted.iter() {

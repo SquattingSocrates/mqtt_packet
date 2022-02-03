@@ -17,8 +17,7 @@ mod tests {
             decoder.decode_packet(protocol_version).unwrap()
         );
         println!("Failed encode {}", name);
-        let encoder = PacketEncoder::new();
-        assert_eq!(buf, encoder.encode(packet, protocol_version).unwrap());
+        assert_eq!(buf, packet.encode(protocol_version).unwrap());
     }
 
     #[test]
@@ -26,13 +25,6 @@ mod tests {
         test_encode_decode(
             "auth",
             MqttPacket::Auth(AuthPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Auth,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 36,
                 reason_code: AuthCode::Success,
                 properties: Some(AuthProperties {
                     authentication_method: "test".to_string(),

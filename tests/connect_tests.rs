@@ -16,26 +16,17 @@ mod tests {
             MqttPacket::Connect(packet.clone()),
             decoder.decode_packet(3).unwrap()
         );
-        let encoder = PacketEncoder::new();
-        assert_eq!(buf, encoder.encode_connect(packet).unwrap());
+        assert_eq!(buf, packet.encode(packet.protocol_version).unwrap());
     }
 
     fn test_encode_error(msg: &str, packet: ConnectPacket) {
         println!("Failed: {}", msg);
-        let encoder = PacketEncoder::new();
-        assert_eq!(Err(msg.to_string()), encoder.encode_connect(packet));
+        assert_eq!(Err(msg.to_string()), packet.encode(packet.protocol_version));
     }
 
     #[test]
     fn decode_bytes_connect() {
         let expected = ConnectPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Connect,
-                qos: 0,
-                dup: false,
-                retain: false,
-            },
-            length: 18,
             protocol_id: Protocol::MQIsdp,
             protocol_version: 3,
             keep_alive: 30,
@@ -62,13 +53,6 @@ mod tests {
     #[test]
     fn test_err_without_client_id() {
         let expected = ConnectPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Connect,
-                qos: 0,
-                dup: false,
-                retain: false,
-            },
-            length: 18,
             protocol_id: Protocol::MQIsdp,
             protocol_version: 3,
             keep_alive: 30,
@@ -87,13 +71,6 @@ mod tests {
         test_decode(
             "connect MQTT 5",
             ConnectPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Connect,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 125,
                 protocol_id: Protocol::Mqtt,
                 protocol_version: 5,
                 user_name: None,
@@ -175,13 +152,6 @@ mod tests {
         test_decode(
             "connect MQTT 5 with will properties but with empty will payload",
             ConnectPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Connect,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 121,
                 protocol_id: Protocol::Mqtt,
                 protocol_version: 5,
                 user_name: None,
@@ -255,13 +225,6 @@ mod tests {
         test_decode(
             "connect MQTT 5 w/o will properties",
             ConnectPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Connect,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 78,
                 protocol_id: Protocol::Mqtt,
                 protocol_version: 5,
                 user_name: None,
@@ -323,13 +286,6 @@ mod tests {
         test_decode(
             "no client_id with 3.1.1",
             ConnectPacket {
-                fixed: FixedHeader {
-                    cmd: PacketType::Connect,
-                    qos: 0,
-                    dup: false,
-                    retain: false,
-                },
-                length: 12,
                 protocol_id: Protocol::Mqtt,
                 protocol_version: 4,
                 user_name: None,
@@ -413,9 +369,7 @@ mod tests {
         assert_eq!(true, messages[2].is_err());
         assert_eq!(true, messages[3].is_ok());
         assert!(if let MqttPacket::Disconnect(DisconnectPacket {
-            reason_code: None,
-            length: 0,
-            ..
+            reason_code: None, ..
         }) = messages[3].as_ref().unwrap()
         {
             true
@@ -433,9 +387,7 @@ mod tests {
 
         assert_eq!(true, messages[5].is_ok());
         assert!(if let MqttPacket::Disconnect(DisconnectPacket {
-            reason_code: None,
-            length: 0,
-            ..
+            reason_code: None, ..
         }) = messages[5].as_ref().unwrap()
         {
             true

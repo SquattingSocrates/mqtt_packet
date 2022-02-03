@@ -17,8 +17,7 @@ mod tests {
 
     fn test_encode(name: &str, packet: MqttPacket, buf: Vec<u8>, protocol_version: u8) {
         println!("Failed encode {}", name);
-        let encoder = PacketEncoder::new();
-        assert_eq!(buf, encoder.encode(packet, protocol_version).unwrap());
+        assert_eq!(buf, packet.encode(protocol_version).unwrap());
     }
 
     fn test_decode_error(msg: &str, buf: Vec<u8>, protocol_version: u8) {
@@ -31,14 +30,7 @@ mod tests {
     }
     #[test]
     fn test_pingreq_0() {
-        let packet = MqttPacket::Pingreq(PingreqPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Pingreq,
-                qos: 0,
-                dup: false,
-                retain: false,
-            },
-        });
+        let packet = MqttPacket::Pingreq;
         let buf = vec![
             192, 0, // Header
         ];
@@ -61,14 +53,7 @@ mod tests {
 
     #[test]
     fn test_pingresp_0() {
-        let packet = MqttPacket::Pingresp(PingrespPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Pingresp,
-                qos: 0,
-                dup: false,
-                retain: false,
-            },
-        });
+        let packet = MqttPacket::Pingresp;
         let buf = vec![
             208, 0, // Header
         ];
@@ -90,13 +75,6 @@ mod tests {
     #[test]
     fn test_disconnect_0() {
         let packet = MqttPacket::Disconnect(DisconnectPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Disconnect,
-                qos: 0,
-                dup: false,
-                retain: false,
-            },
-            length: 0,
             reason_code: None,
             properties: None,
         });
@@ -121,13 +99,6 @@ mod tests {
     #[test]
     fn test_disconnect_1() {
         let packet = MqttPacket::Disconnect(DisconnectPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Disconnect,
-                qos: 0,
-                dup: false,
-                retain: false,
-            },
-            length: 34,
             reason_code: Some(DisconnectCode::NormalDisconnection),
             properties: Some(DisconnectProperties {
                 session_expiry_interval: Some(145),
@@ -154,13 +125,6 @@ mod tests {
     #[test]
     fn test_disconnect_2() {
         let packet = MqttPacket::Disconnect(DisconnectPacket {
-            fixed: FixedHeader {
-                cmd: PacketType::Disconnect,
-                qos: 0,
-                dup: false,
-                retain: false,
-            },
-            length: 2,
             reason_code: Some(DisconnectCode::NormalDisconnection),
             properties: None,
         });
