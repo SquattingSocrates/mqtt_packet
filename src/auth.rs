@@ -37,8 +37,8 @@ impl Packet for AuthPacket {
 
     fn decode<R: io::Read>(
         reader: &mut ByteReader<R>,
-        fixed: FixedHeader,
-        length: u32,
+        _: FixedHeader,
+        _: u32,
         protocol_version: u8,
     ) -> Res<AuthPacket> {
         if protocol_version != 5 {

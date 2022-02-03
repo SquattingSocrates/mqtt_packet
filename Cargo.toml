@@ -1,12 +1,15 @@
 [package]
-name = "mqtt_packet_3_5"
-version = "0.1.1"
+description = "Parse/Encode MQTT5 and MQTT3 messages"
 edition = "2021"
 license = "MIT"
-description = "Parse/Encode MQTT5 and MQTT3 messages"
+name = "mqtt_packet_3_5"
 repository = "https://github.com/SquattingSocrates/mqtt_packet"
+version = "0.2.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
+serde = {version = "1.0", features = ["derive"], optional = true}
+
+[features]
+serde_support = ["serde"]

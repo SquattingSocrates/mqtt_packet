@@ -1,10 +1,13 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub type UserProperties = HashMap<String, Vec<String>>;
 pub type Res<T> = Result<T, String>;
 
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone)]
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum Protocol {
     Mqtt,
     MQIsdp,
@@ -20,11 +23,45 @@ impl Protocol {
     }
 }
 
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone)]
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum QoS {
     QoS0,
     QoS1,
     QoS2,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
+pub enum Granted {
+    QoS0,
+    QoS1,
+    QoS2,
+    Failure,
+}
+
+impl Granted {
+    pub fn to_byte(&self) -> u8 {
+        match self {
+            Granted::QoS0 => 0,
+            Granted::QoS1 => 1,
+            Granted::QoS2 => 2,
+            Granted::Failure => 0x80,
+        }
+    }
+
+    pub fn from_byte(byte: u8) -> Res<Granted> {
+        Ok(match byte {
+            0 => Granted::QoS0,
+            1 => Granted::QoS1,
+            2 => Granted::QoS2,
+            0x80 => Granted::Failure,
+            _ => return Err("Invalid Granted, must be <= 2 or 0x80".to_string()),
+        })
+    }
 }
 
 impl QoS {
@@ -97,7 +134,8 @@ impl PacketType {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[cfg_attr(feature = "serde_support", derive(serde::Serialize, Deserialize))]
 pub enum PacketType {
     Reserved,
     Connect,
@@ -120,7 +158,8 @@ pub enum PacketType {
 /// FixedHeader represents data in the first byte
 /// that is always present, but not all flags are relevant
 /// for every request
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct FixedHeader {
     pub cmd: PacketType,
     pub dup: bool,

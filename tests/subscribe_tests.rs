@@ -275,18 +275,19 @@ mod tests {
     fn test_suback_0() {
         test_decode(
             "suback",
-            MqttPacket::Suback(SubackPacket {
-                // qos: 0,
-                reason_code: None,
-                properties: None,
-                message_id: 6,
-                granted_reason_codes: vec![],
-                granted_qos: vec![QoS::QoS0, QoS::QoS1, QoS::QoS2],
-            }),
+            MqttPacket::Suback(SubackPacket::new_v3(
+                6,
+                vec![
+                    Granted::QoS0,
+                    Granted::QoS1,
+                    Granted::QoS2,
+                    Granted::Failure,
+                ],
+            )),
             vec![
-                144, 5, // Header
+                144, 6, // Header
                 0, 6, // Message ID
-                0, 1, 2,
+                0, 1, 2, 0x80, // rejected subscription
             ],
             3,
         );
@@ -306,7 +307,7 @@ mod tests {
                     SubscriptionReasonCode::GrantedQoS2,
                     SubscriptionReasonCode::UnspecifiedError,
                 ],
-                granted_qos: vec![],
+                granted: vec![],
             }),
             vec![
                 144, 7, // Header
@@ -319,22 +320,9 @@ mod tests {
     }
 
     #[test]
-    fn test_error_5() {
-        test_decode_error(
-            "Invalid QoS, must be <= 2",
-            vec![
-                144, 6, // Header
-                0, 6, // Message ID
-                0, 1, 2, 128, // Granted qos (0, 1, 2) and a rejected being 0x80
-            ],
-            3,
-        );
-    }
-
-    #[test]
     fn test_error_6() {
         test_decode_error(
-            "Invalid QoS, must be <= 2",
+            "Invalid Granted, must be <= 2 or 0x80",
             vec![
                 144, 6, // Header
                 0, 6, // Message ID
@@ -363,7 +351,7 @@ mod tests {
                     SubscriptionReasonCode::GrantedQoS2,
                     SubscriptionReasonCode::UnspecifiedError,
                 ],
-                granted_qos: vec![],
+                granted: vec![],
             }),
             vec![
                 144, 27, // Header

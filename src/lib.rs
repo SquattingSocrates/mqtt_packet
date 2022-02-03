@@ -54,6 +54,7 @@ pub mod publish;
 pub mod structure;
 pub mod suback;
 pub mod subscribe;
+pub mod unsuback;
 pub mod unsubscribe;
 
 /// Library for encoding/decoding MQTTv3 and MQTTv5 messages

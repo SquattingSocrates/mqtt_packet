@@ -1,7 +1,6 @@
 use super::codes::*;
 use super::common::*;
 use crate::mqtt_writer::MqttWriter;
-use serde::{Deserialize, Serialize};
 
 /// Turn any particular type of PropertiesObject
 /// to list of code - Value pairs
@@ -58,7 +57,8 @@ pub enum PropType<'a> {
     VarInt(u32),
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct AuthProperties {
     pub authentication_method: String,
     pub authentication_data: Option<String>,
@@ -104,7 +104,8 @@ impl Properties for AuthProperties {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct PublishProperties {
     pub payload_format_indicator: bool,
     pub message_expiry_interval: Option<u32>,
@@ -185,7 +186,8 @@ impl Properties for PublishProperties {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct SubscribeProperties {
     /// subscription_identifiers is a variable length int
     /// and is not allowed to be 0. If it is set to 0 it won't
@@ -222,7 +224,8 @@ impl Properties for SubscribeProperties {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct DisconnectProperties {
     pub session_expiry_interval: Option<u32>,
     pub server_reference: Option<String>,
@@ -268,13 +271,15 @@ impl Properties for DisconnectProperties {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct ConfirmationProperties {
     pub reason_string: Option<String>,
     pub user_properties: UserProperties,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct UnsubscribeProperties {
     pub user_properties: UserProperties,
 }
@@ -300,7 +305,8 @@ impl Properties for UnsubscribeProperties {
     }
 }
 
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(PartialEq, Debug, Clone, Default)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct WillProperties {
     /// default value is false, both if set to false
     /// and when no value was provided
@@ -335,13 +341,10 @@ impl Properties for WillProperties {
     }
 
     fn to_pairs(&self) -> Res<Vec<(u8, PropType)>> {
-        let mut out = vec![];
-        // if let v = self.will_delay_interval {
-        out.push((0x18, PropType::U32(self.will_delay_interval)));
-        // }
-        // if let v = self.payload_format_indicator {
-        out.push((0x01, PropType::Bool(self.payload_format_indicator)));
-        // }
+        let mut out = vec![
+            (0x18, PropType::U32(self.will_delay_interval)),
+            (0x01, PropType::Bool(self.payload_format_indicator)),
+        ];
         if let Some(v) = self.message_expiry_interval {
             out.push((0x02, PropType::U32(v)));
         }
@@ -361,7 +364,8 @@ impl Properties for WillProperties {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct ConnackProperties {
     pub session_expiry_interval: u32,
     pub assigned_client_identifier: Option<String>,
@@ -501,7 +505,8 @@ impl Properties for ConnackProperties {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 /// A struct for PUBACK, PUBCOMP, PUBREL and PUBREC
 pub struct ConfirmationPacket {
     pub cmd: PacketType,
@@ -542,7 +547,8 @@ impl Properties for ConfirmationProperties {
     }
 }
 
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct ConnectProperties {
     // defaults to 0
     pub session_expiry_interval: u32,

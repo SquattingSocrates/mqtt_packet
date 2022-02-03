@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 mod codes;
 mod common;
 mod properties;
@@ -19,13 +18,15 @@ pub trait Packet: Sized {
     // fn matches(t: PacketType) -> bool;
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct AuthPacket {
     pub reason_code: AuthCode,
     pub properties: Option<AuthProperties>,
 }
 
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct LastWill {
     pub topic: Option<String>,
     pub payload: Option<String>,
@@ -34,7 +35,8 @@ pub struct LastWill {
     pub properties: Option<WillProperties>,
 }
 
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct ConnectPacket {
     pub client_id: String,
     pub protocol_version: u8,
@@ -48,7 +50,8 @@ pub struct ConnectPacket {
     pub properties: Option<ConnectProperties>,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Default)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct ConnackPacket {
     pub return_code: Option<u8>,
     pub reason_code: Option<u8>,
@@ -56,25 +59,16 @@ pub struct ConnackPacket {
     pub properties: Option<ConnackProperties>,
 }
 
-impl Default for ConnackPacket {
-    fn default() -> ConnackPacket {
-        ConnackPacket {
-            return_code: None,
-            reason_code: None,
-            session_present: false,
-            properties: None,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct DisconnectPacket {
     // only exists in MQTT 5
     pub reason_code: Option<DisconnectCode>,
     pub properties: Option<DisconnectProperties>,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 /// Captures value of published message
 pub struct PublishPacket {
     pub dup: bool,
@@ -89,7 +83,8 @@ pub struct PublishPacket {
     pub properties: Option<PublishProperties>,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct Subscription {
     /// Name of topic or wildcard pattern to subscribe to
     pub topic: String,
@@ -124,7 +119,8 @@ pub struct Subscription {
     pub rh: Option<u8>,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct SubscribePacket {
     pub qos: u8,
     pub subscriptions: Vec<Subscription>,
@@ -132,7 +128,8 @@ pub struct SubscribePacket {
     pub message_id: u16,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 /// Packet that holds information of subscription acknowledgement (SUBACK)
 pub struct SubackPacket {
     pub reason_code: Option<u8>,
@@ -141,10 +138,11 @@ pub struct SubackPacket {
     /// used in MQTT 5
     pub granted_reason_codes: Vec<SubscriptionReasonCode>,
     /// used in MQTT 3.1 and 4
-    pub granted_qos: Vec<QoS>,
+    pub granted: Vec<Granted>,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct UnsubscribePacket {
     pub qos: u8,
     pub message_id: u16,
@@ -152,7 +150,8 @@ pub struct UnsubscribePacket {
     pub unsubscriptions: Vec<String>,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct UnsubackPacket {
     pub message_id: u16,
     /// used only in MQTT 5, will always empty if
@@ -161,20 +160,16 @@ pub struct UnsubackPacket {
     pub properties: Option<ConfirmationProperties>,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct PingreqPacket;
 
 impl Packet for PingreqPacket {
-    fn decode<R: io::Read>(
-        reader: &mut ByteReader<R>,
-        fixed: FixedHeader,
-        length: u32,
-        protocol_version: u8,
-    ) -> Res<Self> {
+    fn decode<R: io::Read>(_: &mut ByteReader<R>, _: FixedHeader, _: u32, _: u8) -> Res<Self> {
         Ok(PingreqPacket {})
     }
 
-    fn encode(&self, protocol_version: u8) -> Res<Vec<u8>> {
+    fn encode(&self, _: u8) -> Res<Vec<u8>> {
         Ok(vec![
             FixedHeader::encode(&FixedHeader::for_type(PacketType::Pingreq)),
             0,
@@ -182,20 +177,16 @@ impl Packet for PingreqPacket {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct PingrespPacket;
 
 impl Packet for PingrespPacket {
-    fn decode<R: io::Read>(
-        reader: &mut ByteReader<R>,
-        fixed: FixedHeader,
-        length: u32,
-        protocol_version: u8,
-    ) -> Res<Self> {
+    fn decode<R: io::Read>(_: &mut ByteReader<R>, _: FixedHeader, _: u32, _: u8) -> Res<Self> {
         Ok(PingrespPacket {})
     }
 
-    fn encode(&self, protocol_version: u8) -> Res<Vec<u8>> {
+    fn encode(&self, _: u8) -> Res<Vec<u8>> {
         Ok(vec![
             FixedHeader::encode(&FixedHeader::for_type(PacketType::Pingresp)),
             0,

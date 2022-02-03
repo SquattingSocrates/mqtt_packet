@@ -1,9 +1,9 @@
 use crate::byte_reader::ByteReader;
 use crate::structure::*;
-use serde::{Deserialize, Serialize};
 use std::io;
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub enum MqttPacket {
     Connect(ConnectPacket),
     Connack(ConnackPacket),
@@ -192,7 +192,8 @@ impl<R: io::Read> PacketDecoder<R> {
                 // passing protocol_version is unnecessary here
                 MqttPacket::Connect(ConnectPacket::decode(&mut self.reader, fixed, length, 5)?)
             }
-            PacketType::Connack => MqttPacket::Connack(self.decode_connack_with_length(
+            PacketType::Connack => MqttPacket::Connack(ConnackPacket::decode(
+                &mut self.reader,
                 fixed,
                 length,
                 protocol_version,

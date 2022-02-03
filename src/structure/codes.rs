@@ -1,7 +1,7 @@
 use super::common::*;
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct ReasonCode {}
 
 pub trait MqttCode<T> {
@@ -9,7 +9,8 @@ pub trait MqttCode<T> {
     fn to_byte(&self) -> u8;
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 /// Use an enum to make setting the reason code easier and safer
 pub enum SubscriptionReasonCode {
     /// 0x00  The subscription is accepted and the maximum QoS sent will be QoS 0. This might be a lower QoS than was requested.
@@ -76,7 +77,8 @@ impl MqttCode<SubscriptionReasonCode> for SubscriptionReasonCode {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub enum DisconnectCode {
     NormalDisconnection,                 //0x00
     DisconnectWithWillMessage,           //0x04
@@ -180,7 +182,8 @@ impl MqttCode<DisconnectCode> for DisconnectCode {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub enum UnsubackCode {
     Success,
     NoSubscriptionExisted,
@@ -219,7 +222,8 @@ impl MqttCode<UnsubackCode> for UnsubackCode {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub enum AuthCode {
     Success,                // 0x0
     ContinueAuthentication, // 0x18
@@ -245,7 +249,8 @@ impl MqttCode<AuthCode> for AuthCode {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 /// PUMBCOMP/PUBREL codes enum
 pub enum PubcompPubrelCode {
     Success,                  // 0x0
@@ -269,7 +274,8 @@ impl MqttCode<PubcompPubrelCode> for PubcompPubrelCode {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 /// PUBACK/PUBREC codes enum
 pub enum PubackPubrecCode {
     Success,

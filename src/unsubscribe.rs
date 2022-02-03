@@ -34,7 +34,7 @@ impl Packet for UnsubscribePacket {
 
     // Unsubs
     for unsub in self.unsubscriptions.iter() {
-      writer.write_utf8_str(&unsub);
+      writer.write_utf8_str(unsub);
     }
     Ok(writer.into_vec())
   }
@@ -42,7 +42,7 @@ impl Packet for UnsubscribePacket {
   fn decode<R: io::Read>(
     reader: &mut ByteReader<R>,
     fixed: FixedHeader,
-    length: u32,
+    _: u32,
     protocol_version: u8,
   ) -> Res<Self> {
     let message_id = reader.read_u16()?;

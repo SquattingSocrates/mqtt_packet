@@ -67,8 +67,8 @@ impl MqttWriter {
                         // split into pairs
                         for val in v {
                             self.write_u8(code);
-                            self.write_utf8_str(&k);
-                            self.write_utf8_str(&val);
+                            self.write_utf8_str(k);
+                            self.write_utf8_str(val);
                         }
                     }
                 }
@@ -89,12 +89,6 @@ impl MqttWriter {
             }
         }
         Ok(())
-    }
-
-    fn write_empty(mut self, fixed: FixedHeader) -> Res<Vec<u8>> {
-        self.buf.push(FixedHeader::encode(&fixed));
-        self.buf.push(0);
-        Ok(self.buf)
     }
 
     pub fn encode_multibyte_num(message_id: u32) -> Vec<u8> {
@@ -184,13 +178,10 @@ impl MqttWriter {
     }
 
     pub fn write_sized(&mut self, v: &[u8], size: &[u8]) -> Res<()> {
-        println!("WRITING SIZED {:?} {:?}", v, size);
         // write only 0 to indicate empty properties
         if v.is_empty() && size == [0] {
-            println!("WRITING ONLY 0");
             self.write_u8(0);
         } else if !v.is_empty() {
-            println!("ENCODING PROPS REGULARLY");
             // normally encode length and properties
             self.write_slice(size);
             self.write_slice(v);

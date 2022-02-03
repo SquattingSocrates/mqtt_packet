@@ -134,10 +134,10 @@ impl ConfirmationPacket {
     /// a 2 byte message_id, a reason code and possibly empty properties
     pub fn pubrel_v5(
         message_id: u16,
-        reason_code: PubackPubrecCode,
+        reason_code: PubcompPubrelCode,
         properties: Option<ConfirmationProperties>,
     ) -> ConfirmationPacket {
-        Self::puback_v5_builder(PacketType::Pubrel, message_id, reason_code, properties)
+        Self::pubcomp_v5_builder(PacketType::Pubrel, message_id, reason_code, properties)
     }
 
     /// create a correct v3 PUBCOMP packet. A v3 PUBCOMP requires
@@ -165,10 +165,10 @@ impl ConfirmationPacket {
     /// a 2 byte message_id, a reason code and possibly empty properties
     pub fn pubcomp_v5(
         message_id: u16,
-        reason_code: PubackPubrecCode,
+        reason_code: PubcompPubrelCode,
         properties: Option<ConfirmationProperties>,
     ) -> ConfirmationPacket {
-        Self::puback_v5_builder(PacketType::Pubcomp, message_id, reason_code, properties)
+        Self::pubcomp_v5_builder(PacketType::Pubcomp, message_id, reason_code, properties)
     }
 }
 
@@ -244,14 +244,12 @@ impl Packet for ConfirmationPacket {
 
         // Message ID
         writer.write_u16(*message_id);
-        println!("AFTER MESSAGE_ID {:?}", writer.buf);
         // maybe write code
-        if length > 2 && code.is_some() {
-            writer.write_u8(code.unwrap());
+        if let (true, Some(c)) = (length > 2, code) {
+            writer.write_u8(c);
         }
 
         // properies mqtt 5
-        println!("BEFORE WRITING PROPS {:?}", writer.buf);
         if length > 2 {
             writer.write_sized(&properties_data, &props_len)?;
         }

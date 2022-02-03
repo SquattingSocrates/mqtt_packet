@@ -11,12 +11,12 @@ mod tests {
 
     fn test_encode_decode(name: &str, packet: MqttPacket, buf: Vec<u8>, protocol_version: u8) {
         let mut decoder = dec_from_buf(buf.clone());
-        println!("Failed decode: {}", name);
+        eprintln!("Failed decode: {}", name);
         assert_eq!(
             packet.clone(),
             decoder.decode_packet(protocol_version).unwrap()
         );
-        println!("Failed encode {}", name);
+        eprintln!("Failed encode {}", name);
         assert_eq!(buf, packet.encode(protocol_version).unwrap());
     }
 

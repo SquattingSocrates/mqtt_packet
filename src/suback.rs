@@ -3,11 +3,41 @@ use crate::mqtt_writer::MqttWriter;
 use crate::structure::*;
 use std::io;
 
+impl SubackPacket {
+    /// Convenient constructor for v3 SUBACK packet. A v3 SUBACK requires
+    /// only a 2 byte message_id and a list of granted QoS for each subscribed
+    /// topic/pattern
+    /// # Example
+    ///
+    /// ```
+    /// use mqtt_packet_3_5::{SubackPacket, Granted};
+    /// let packet = SubackPacket::new_v3(123, vec![Granted::QoS1]);
+    /// assert_eq!(packet, SubackPacket {
+    ///     message_id: 123,
+    ///     granted: vec![Granted::QoS1],
+    ///     granted_reason_codes: vec![], // v3 has QoS, v5 has more possible codes
+    ///     properties: None,             // v3 has no properties
+    ///     reason_code: None,            // v3 has no reason code
+    /// });
+    ///
+    ///
+    /// ```
+    pub fn new_v3(message_id: u16, granted: Vec<Granted>) -> SubackPacket {
+        SubackPacket {
+            message_id,
+            granted,
+            granted_reason_codes: vec![],
+            properties: None,
+            reason_code: None,
+        }
+    }
+}
+
 impl Packet for SubackPacket {
     fn decode<R: io::Read>(
         reader: &mut ByteReader<R>,
-        fixed: FixedHeader,
-        length: u32,
+        _: FixedHeader,
+        _: u32,
         protocol_version: u8,
     ) -> Res<Self> {
         let message_id = reader.read_u16()?;
@@ -16,7 +46,7 @@ impl Packet for SubackPacket {
             reason_code: None,
             properties: None,
             granted_reason_codes: vec![],
-            granted_qos: vec![],
+            granted: vec![],
             message_id,
         };
 
@@ -40,7 +70,7 @@ impl Packet for SubackPacket {
                     .granted_reason_codes
                     .push(SubscriptionReasonCode::from_byte(code)?);
             } else {
-                packet.granted_qos.push(QoS::from_byte(code)?);
+                packet.granted.push(Granted::from_byte(code)?);
             }
         }
         Ok(packet)
@@ -57,7 +87,7 @@ impl Packet for SubackPacket {
                 .map(|code| code.to_byte())
                 .collect()
         } else {
-            self.granted_qos.iter().map(|code| code.to_byte()).collect()
+            self.granted.iter().map(|code| code.to_byte()).collect()
         };
         length += granted.len();
 
@@ -81,17 +111,5 @@ impl Packet for SubackPacket {
         // Granted data
         writer.write_vec(granted);
         Ok(writer.into_vec())
-    }
-}
-
-impl SubackPacket {
-    fn new_v3(message_id: u16, granted_qos: Vec<QoS>) -> SubackPacket {
-        SubackPacket {
-            message_id,
-            granted_qos,
-            granted_reason_codes: vec![],
-            properties: None,
-            reason_code: None,
-        }
     }
 }

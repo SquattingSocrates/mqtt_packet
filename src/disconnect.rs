@@ -6,7 +6,7 @@ use std::io;
 impl Packet for DisconnectPacket {
     fn decode<R: io::Read>(
         reader: &mut ByteReader<R>,
-        fixed: FixedHeader,
+        _: FixedHeader,
         length: u32,
         protocol_version: u8,
     ) -> Res<DisconnectPacket> {

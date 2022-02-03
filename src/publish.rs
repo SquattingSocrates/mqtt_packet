@@ -8,7 +8,7 @@ impl Packet for PublishPacket {
     fn decode<R: io::Read>(
         reader: &mut ByteReader<R>,
         fixed: FixedHeader,
-        length: u32,
+        _: u32,
         protocol_version: u8,
     ) -> Res<PublishPacket> {
         let topic = reader.read_utf8_string()?;

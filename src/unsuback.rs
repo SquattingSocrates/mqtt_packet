@@ -1,6 +1,5 @@
 use crate::byte_reader::ByteReader;
 use crate::mqtt_writer::MqttWriter;
-use crate::packet::*;
 use crate::structure::*;
 use std::io;
 
@@ -38,7 +37,7 @@ impl Packet for UnsubackPacket {
     }
     fn decode<R: io::Read>(
         reader: &mut ByteReader<R>,
-        fixed: FixedHeader,
+        _: FixedHeader,
         length: u32,
         protocol_version: u8,
     ) -> Res<Self> {

@@ -14,7 +14,7 @@ impl Packet for SubscribePacket {
     fn decode<R: io::Read>(
         reader: &mut ByteReader<R>,
         fixed: FixedHeader,
-        length: u32,
+        _: u32,
         protocol_version: u8,
     ) -> Res<Self> {
         let message_id = reader.read_u16()?;

@@ -1,7 +1,6 @@
 use crate::byte_reader::ByteReader;
 use crate::mqtt_writer::MqttWriter;
 use crate::structure::*;
-use serde::{Deserialize, Serialize};
 use std::io;
 
 const MQISDP_BUF: [u8; 6] = [b'M', b'Q', b'I', b's', b'd', b'p'];
@@ -9,7 +8,7 @@ const MQTT_BUF: [u8; 4] = [b'M', b'Q', b'T', b'T'];
 
 impl Packet for ConnectPacket {
     /// This
-    fn encode(&self, protocol_version: u8) -> Res<Vec<u8>> {
+    fn encode(&self, _: u8) -> Res<Vec<u8>> {
         let ConnectPacket {
             properties,
             protocol_id,
@@ -67,8 +66,8 @@ impl Packet for ConnectPacket {
         let mut has_will = false;
         let mut will_properties = vec![];
         let mut will_props_len = vec![];
-        let mut will_topic: &str = &"";
-        let mut will_payload: &str = &"";
+        let mut will_topic: &str = "";
+        let mut will_payload: &str = "";
         if let Some(will) = will {
             let LastWill {
                 topic,
@@ -171,12 +170,7 @@ impl Packet for ConnectPacket {
     }
 
     /// Decode connect packet
-    fn decode<R: io::Read>(
-        reader: &mut ByteReader<R>,
-        fixed: FixedHeader,
-        length: u32,
-        protocol_version: u8,
-    ) -> Res<Self> {
+    fn decode<R: io::Read>(reader: &mut ByteReader<R>, _: FixedHeader, _: u32, _: u8) -> Res<Self> {
         // Parse protocolId
         let protocol_id = reader.read_utf8_string()?;
         let protocol_id = Protocol::from_source(&protocol_id)?;
@@ -252,7 +246,8 @@ impl Packet for ConnectPacket {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct ConnectFlags {
     pub user_name: bool,
     pub password: bool,
